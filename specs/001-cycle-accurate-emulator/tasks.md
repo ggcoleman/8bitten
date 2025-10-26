@@ -1,15 +1,18 @@
 # Implementation Tasks: 8Bitten - Cycle-Accurate NES Emulator
 
-**Feature**: 8Bitten - Cycle-Accurate NES Emulator  
-**Branch**: `001-cycle-accurate-emulator`  
-**Created**: 2025-10-26  
-**Total Estimated Tasks**: 85+ tasks across 8 user stories
+**Feature**: 8Bitten - Cycle-Accurate NES Emulator
+**Branch**: `001-cycle-accurate-emulator`
+**Created**: 2025-10-26
+**Updated**: 2025-10-26 (Regenerated from Design Artifacts)
+**Total Estimated Tasks**: 125 tasks across 8 user stories
 
 ## Implementation Strategy
 
-**MVP Scope**: User Story 1 (Headless ROM Execution) - Provides foundation for all other features  
-**Delivery Approach**: Incremental delivery by user story priority  
-**Parallel Opportunities**: Core components can be developed in parallel after foundational setup
+**MVP Scope**: User Story 1 (Headless ROM Execution) - Provides foundation for all other features
+**Delivery Approach**: Incremental delivery by user story priority with research-grade quality standards
+**Parallel Opportunities**: Core components (CPU, PPU, APU) can be developed in parallel after foundational setup
+**Quality Gates**: TDD approach with comprehensive testing at each phase
+**Architecture**: Component-based design with clear interfaces and dependency injection
 
 ## Dependencies & Execution Order
 
@@ -151,76 +154,102 @@ graph TD
 - [ ] T072 [US5] Document mapper implementations in docs/Components/Mappers.md
 - [ ] T073 [US5] Create API documentation in docs/API/
 - [ ] T074 [US5] Generate Mermaid diagrams for component relationships
-- [ ] T075 [US5] Create troubleshooting guides in docs/Troubleshooting/
+- [ ] T075 [US5] Create comprehensive troubleshooting guides covering ROM compatibility, performance issues, audio/video glitches, input lag diagnosis, and mapper-specific problems in docs/Troubleshooting/
 - [ ] T076 [US5] Document performance vs accuracy trade-offs
 - [ ] T077 [US5] Create contributor guidelines and development setup docs
+- [ ] T078 [US5] Implement documentation versioning and synchronization automation in .github/workflows/docs-sync.yml
 
-**US5 Parallel Opportunities**: T067-T072 (component docs), T073-T075 (API and guides)
+**US5 Parallel Opportunities**: T067-T072 (component docs), T073-T077 (API and guides)
 
 ## Phase 8: User Story 6 - Academic Research (Priority P6)
 
 **Goal**: Research-grade metrics, recording, and analysis tools
 **Independent Test**: Collect comprehensive metrics, export research data, verify deterministic replay
 
-- [ ] T078 [US6] Implement comprehensive metrics collection in src/Infrastructure/Metrics/ResearchMetrics.cs
-- [ ] T079 [US6] Create input recording system in src/Infrastructure/Recording/InputRecorder.cs
-- [ ] T080 [US6] Implement deterministic replay in src/Infrastructure/Recording/ReplayEngine.cs
-- [ ] T081 [US6] Create statistical analysis tools in src/Infrastructure/Analysis/StatisticalAnalyzer.cs
-- [ ] T082 [US6] Implement multi-format data export (CSV, JSON, HDF5) in src/Interfaces/Research/DataExporter.cs
-- [ ] T083 [US6] Create session recording with complete state capture in src/Infrastructure/Recording/SessionRecorder.cs
-- [ ] T084 [US6] Implement research APIs in src/Interfaces/Research/ResearchAPI.cs
-- [ ] T085 [US6] Create frame-by-frame analysis mode in src/Infrastructure/Analysis/FrameAnalyzer.cs
-- [ ] T086 [US6] Add confidence intervals and error bounds to statistical analysis
-- [ ] T087 [US6] Implement cross-platform determinism validation
+- [ ] T079 [US6] Implement comprehensive metrics collection in src/Infrastructure/Metrics/ResearchMetrics.cs
+- [ ] T080 [US6] Create input recording system in src/Infrastructure/Recording/InputRecorder.cs
+- [ ] T081 [US6] Implement deterministic replay in src/Infrastructure/Recording/ReplayEngine.cs
+- [ ] T082 [US6] Create statistical analysis tools in src/Infrastructure/Analysis/StatisticalAnalyzer.cs
+- [ ] T083 [US6] Implement multi-format data export (CSV, JSON, HDF5) in src/Interfaces/Research/DataExporter.cs
+- [ ] T084 [US6] Create session recording with complete state capture in src/Infrastructure/Recording/SessionRecorder.cs
+- [ ] T085 [US6] Implement research APIs in src/Interfaces/Research/ResearchAPI.cs
+- [ ] T086 [US6] Create frame-by-frame analysis mode in src/Infrastructure/Analysis/FrameAnalyzer.cs
+- [ ] T087 [US6] Add confidence intervals and error bounds to statistical analysis
+- [ ] T088 [US6] Implement cross-platform determinism validation
 
-**US6 Parallel Opportunities**: T078-T080 (core recording), T081-T083 (analysis tools), T084-T085 (APIs)
+**US6 Parallel Opportunities**: T079-T081 (core recording), T082-T084 (analysis tools), T085-T086 (APIs)
 
 ## Phase 9: User Story 7 - Speedrunning Analysis (Priority P7)
 
 **Goal**: Frame-perfect timing analysis and optimization tools
 **Independent Test**: Analyze speedrun, generate optimization recommendations, validate timing accuracy
 
-- [ ] T088 [US7] Implement real-time overlay system in src/Interfaces/Analysis/OverlayManager.cs
-- [ ] T089 [US7] Create input optimization analyzer in src/Infrastructure/Analysis/InputOptimizer.cs
-- [ ] T090 [US7] Implement run comparison tools in src/Infrastructure/Analysis/RunComparator.cs
-- [ ] T091 [US7] Create performance profiling with hotspot identification in src/Infrastructure/Analysis/PerformanceProfiler.cs
-- [ ] T092 [US7] Implement timing validation against console hardware in src/Infrastructure/Analysis/TimingValidator.cs
-- [ ] T093 [US7] Create speedrunning-specific metrics collection in src/Infrastructure/Metrics/SpeedrunMetrics.cs
-- [ ] T094 [US7] Implement optimization recommendation engine in src/Infrastructure/Analysis/OptimizationEngine.cs
-- [ ] T095 [US7] Create speedrunning analysis UI in src/Interfaces/Analysis/SpeedrunAnalysisView.axaml
+- [ ] T089 [US7] Implement real-time overlay system in src/Interfaces/Analysis/OverlayManager.cs
+- [ ] T090 [US7] Create input optimization analyzer in src/Infrastructure/Analysis/InputOptimizer.cs
+- [ ] T091 [US7] Implement run comparison tools in src/Infrastructure/Analysis/RunComparator.cs
+- [ ] T092 [US7] Create performance profiling with hotspot identification in src/Infrastructure/Analysis/PerformanceProfiler.cs
+- [ ] T093 [US7] Implement timing validation against console hardware in src/Infrastructure/Analysis/TimingValidator.cs
+- [ ] T094 [US7] Create speedrunning-specific metrics collection in src/Infrastructure/Metrics/SpeedrunMetrics.cs
+- [ ] T095 [US7] Implement optimization recommendation engine in src/Infrastructure/Analysis/OptimizationEngine.cs
+- [ ] T096 [US7] Create speedrunning analysis UI in src/Interfaces/Analysis/SpeedrunAnalysisView.axaml
 
-**US7 Parallel Opportunities**: T088-T090 (core analysis), T091-T093 (profiling and metrics)
+**US7 Parallel Opportunities**: T089-T091 (core analysis), T092-T094 (profiling and metrics)
 
 ## Phase 10: User Story 8 - Hardware Validation (Priority P8)
 
 **Goal**: Comprehensive accuracy validation against hardware references
 **Independent Test**: Run hardware test ROMs, validate against multiple references, verify edge cases
 
-- [ ] T096 [US8] Implement Blargg test ROM integration in tests/Compatibility/Blargg/
-- [ ] T097 [US8] Create hardware reference validation framework in tests/Compatibility/HardwareValidation/
-- [ ] T098 [US8] Implement additional mapper support (MMC1, MMC3, UNROM) in src/Core/Cartridge/Mappers/
-- [ ] T099 [US8] Create edge case testing suite in tests/Integration/EdgeCases/
-- [ ] T100 [US8] Implement timing precision validation in tests/Integration/Timing/
-- [ ] T101 [US8] Create automated accuracy regression testing in tests/Compatibility/RegressionTests/
-- [ ] T102 [US8] Implement hardware quirk reproduction in src/Core/
-- [ ] T103 [US8] Create comprehensive ROM compatibility testing framework
+- [ ] T097 [US8] Implement Blargg test ROM integration in tests/Compatibility/Blargg/
+- [ ] T098 [US8] Create hardware reference validation framework in tests/Compatibility/HardwareValidation/
+- [ ] T099 [US8] Implement additional mapper support (MMC1, MMC3, UNROM) in src/Core/Cartridge/Mappers/
+- [ ] T100 [US8] Create edge case testing suite in tests/Integration/EdgeCases/
+- [ ] T101 [US8] Implement timing precision validation in tests/Integration/Timing/
+- [ ] T102 [US8] Create automated accuracy regression testing in tests/Compatibility/RegressionTests/
+- [ ] T103 [US8] Implement hardware quirk reproduction in src/Core/
+- [ ] T104 [US8] Create comprehensive ROM compatibility testing framework
 
-**US8 Parallel Opportunities**: T096-T098 (validation frameworks), T099-T101 (testing suites)
+**US8 Parallel Opportunities**: T097-T099 (validation frameworks), T100-T102 (testing suites)
 
 ## Phase 11: Polish & Cross-Cutting Concerns
 
 **Goal**: Final polish, performance optimization, and production readiness
 
-- [ ] T104 [P] Implement comprehensive error handling and logging across all components
-- [ ] T105 [P] Add performance optimizations based on profiling results
-- [ ] T106 [P] Create installer and distribution packages for Windows, macOS, Linux
-- [ ] T107 [P] Implement telemetry and crash reporting (opt-in)
-- [ ] T108 [P] Add comprehensive integration tests covering all user scenarios
-- [ ] T109 [P] Create user manual and getting started guides
-- [ ] T110 [P] Implement accessibility features and keyboard navigation
-- [ ] T111 [P] Add internationalization support for multiple languages
-- [ ] T112 [P] Create automated performance benchmarking suite
-- [ ] T113 [P] Final security review and vulnerability assessment
+- [ ] T105 [P] Implement comprehensive error handling and logging across all components
+- [ ] T106 [P] Add performance optimizations based on profiling results
+- [ ] T107 [P] Create installer and distribution packages for Windows, macOS, Linux
+- [ ] T108 [P] Implement telemetry and crash reporting (opt-in)
+- [ ] T109 [P] Add comprehensive integration tests covering all user scenarios
+- [ ] T110 [P] Create user manual and getting started guides
+- [ ] T111 [P] Implement accessibility features and keyboard navigation
+- [ ] T112 [P] Add internationalization support for multiple languages
+- [ ] T113 [P] Create automated performance benchmarking suite
+- [ ] T114 [P] Final security review and vulnerability assessment
+
+## Phase 12: Specification Refinement Implementation
+
+**Goal**: Implement enhanced requirements from specification refinement addressing critical ambiguities
+
+- [ ] T115 [P] [US1] Implement enhanced power-on/reset behavior with specific register initialization in src/Core/CPU/ResetHandler.cs
+- [ ] T116 [P] [US1] Add comprehensive diagnostic output system with structured JSON/CSV formats in src/Infrastructure/Logging/DiagnosticExporter.cs
+- [ ] T117 [P] [US2] Implement three-tier performance mode system (Maximum/Balanced/Performance) in src/Core/Timing/PerformanceModeManager.cs
+- [ ] T118 [P] [US4] Implement enhanced MCP security with JWT authentication and role-based access control in src/Interfaces/MCP/SecurityManager.cs
+- [ ] T119 [P] [US6] Add structured data export schemas for CSV, JSON, HDF5, and binary formats in src/Interfaces/Research/SchemaDefinitions.cs
+
+**US12 Parallel Opportunities**: All tasks can run in parallel as they address different components
+
+## Phase 13: Data Model Implementation
+
+**Goal**: Implement comprehensive data models based on design artifacts
+
+- [ ] T120 [P] [US1] Implement CPU state model with all 6502 registers and flags in src/Core/CPU/CPUState.cs
+- [ ] T121 [P] [US1] Implement PPU state model with VRAM, OAM, and rendering pipeline state in src/Core/PPU/PPUState.cs
+- [ ] T122 [P] [US1] Implement APU state model with sound channels and audio buffer state in src/Core/APU/APUState.cs
+- [ ] T123 [P] [US1] Implement memory map model with address space and bank switching in src/Core/Memory/MemoryMap.cs
+- [ ] T124 [P] [US1] Implement ROM cartridge model with header, PRG/CHR ROM, and mapper config in src/Core/Cartridge/ROMCartridge.cs
+- [ ] T125 [P] [US6] Implement session recording model with complete state capture in src/Infrastructure/Recording/SessionRecording.cs
+
+**US13 Parallel Opportunities**: All data models can be implemented in parallel
 
 ## Parallel Execution Examples
 
@@ -241,10 +270,31 @@ graph TD
 
 ## Task Summary
 
-**Total Tasks**: 113 tasks across 11 phases
+**Total Tasks**: 125 tasks across 13 phases
 **MVP Scope**: Phase 1-3 (T001-T032) - 32 tasks for basic headless emulation
 **Core Gaming**: Phase 1-4 (T001-T044) - 44 tasks for full gaming experience
-**Research Platform**: Phase 1-8 (T001-T087) - 87 tasks for academic research capabilities
-**Complete Platform**: All phases (T001-T113) - 113 tasks for definitive NES emulator
+**Research Platform**: Phase 1-8 (T001-T088) - 88 tasks for academic research capabilities
+**Enhanced Platform**: Phase 1-12 (T001-T119) - 119 tasks including specification refinements
+**Complete Platform**: All phases (T001-T125) - 125 tasks for definitive NES emulator with comprehensive data models
 
 **Estimated Timeline**: 6-12 months depending on team size and parallel execution capability
+
+## Design Artifacts Integration
+
+**Phase 13 incorporates comprehensive design artifacts**:
+- **Data Models**: Complete entity models from data-model.md with state management
+- **Interface Contracts**: Implementation of contracts from emulator-core.cs and mcp-interface.json
+- **Research Decisions**: Technology choices from research.md (MonoGame, NAudio, Avalonia)
+- **Architecture Alignment**: Project structure follows plan.md specifications
+- **Quality Standards**: TDD approach with comprehensive testing framework
+
+## Specification Refinement Integration
+
+**Phase 12 addresses critical specification refinements**:
+- **Enhanced Security**: JWT-based MCP authentication with role-based access control
+- **Performance Modes**: Three-tier system with quantified accuracy/speed trade-offs
+- **Diagnostic Output**: Comprehensive structured logging with JSON/CSV formats
+- **Data Export Schemas**: Defined schemas for all research data export formats
+- **Hardware Accuracy**: Enhanced power-on/reset behavior with specific register values
+
+These refinements resolve HIGH severity ambiguities identified in cross-artifact analysis and ensure research-grade quality standards.

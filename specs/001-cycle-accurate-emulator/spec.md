@@ -179,15 +179,15 @@ An emulation researcher or developer needs to validate that the emulator accurat
 - **FR-010**: System MUST output authentic NES resolution (256x240) with configurable scaling and aspect ratio options
 - **FR-011**: System MUST generate authentic NES audio output with configurable volume and audio device selection
 - **FR-012**: System MUST handle memory mapping and bank switching according to cartridge specifications
-- **FR-013**: System MUST implement proper power-on and reset behavior matching original hardware
+- **FR-013**: System MUST implement proper power-on and reset behavior matching original hardware including CPU register initialization (PC from reset vector $FFFC-$FFFD, SP=$FD, P=$34), PPU register clearing, APU silence, memory initialization patterns, and reset button functionality with proper timing delays
 - **FR-014**: System MUST support real-time execution at 60 FPS (NTSC timing) with configurable performance modes
-- **FR-015**: System MUST provide diagnostic output for debugging and validation purposes
+- **FR-015**: System MUST provide comprehensive diagnostic output including CPU state (registers, flags, cycle count), PPU state (scanline, pixel position, VRAM contents), APU state (channel status, sample generation), memory access logs, and timing analysis data in structured formats (JSON, CSV) for debugging and validation purposes
 - **FR-016**: System MUST provide configurable graphics options including scaling filters, fullscreen mode, and VSync settings
 - **FR-017**: System MUST provide configurable audio options including sample rate, buffer size, and audio driver selection
-- **FR-018**: System MUST provide configurable performance options including frame limiting, CPU usage optimization, and accuracy vs speed trade-offs
+- **FR-018**: System MUST provide three distinct performance modes: (1) Maximum Accuracy mode maintaining cycle-perfect timing with 100% hardware fidelity, (2) Balanced mode allowing minor timing optimizations while preserving gameplay accuracy (99.9% compatibility), and (3) Performance mode prioritizing speed with acceptable accuracy trade-offs (95% compatibility, 2x-4x speed improvement) with real-time mode switching
 - **FR-019**: System MUST persist user configuration settings between sessions using JSON files in user application data directory
 - **FR-020**: System MUST allow real-time adjustment of settings without requiring emulator restart
-- **FR-021**: System MUST provide MCP (Model Context Protocol) interface for AI agent communication and control with token-based authentication
+- **FR-021**: System MUST provide MCP (Model Context Protocol) interface for AI agent communication and control with JWT-based authentication including token expiration (24-hour default), refresh token mechanism, role-based access control (read-only, control, admin), rate limiting (100 requests/minute per token), and secure token storage with encryption at rest
 - **FR-022**: System MUST accept programmatic controller input from AI agents via the MCP interface with proper session management
 - **FR-023**: System MUST provide structured game state data including screen pixels, memory contents, and emulator metrics
 - **FR-024**: System MUST support automated gameplay sessions with configurable speed and frame stepping
@@ -201,7 +201,7 @@ An emulation researcher or developer needs to validate that the emulator accurat
 - **FR-032**: System MUST include timing diagrams explaining synchronization between hardware components using automated diagram generation tools
 - **FR-033**: System MUST document mapper implementations with detailed explanations of banking and memory mapping
 - **FR-034**: System MUST provide API documentation for all public interfaces and extension points
-- **FR-035**: System MUST include troubleshooting guides for common emulation issues and edge cases
+- **FR-035**: System MUST include comprehensive troubleshooting guides covering ROM compatibility issues, performance problems, audio/video glitches, input lag diagnosis, mapper-specific problems, and hardware accuracy validation failures with step-by-step resolution procedures and diagnostic commands
 - **FR-036**: System MUST maintain documentation versioning aligned with code changes and updates
 - **FR-037**: System MUST document CPU (6502) architecture including instruction set, addressing modes, interrupt handling, and timing behavior
 - **FR-038**: System MUST document PPU (Picture Processing Unit) including rendering pipeline, sprite handling, background rendering, and scanline timing
@@ -216,7 +216,7 @@ An emulation researcher or developer needs to validate that the emulator accurat
 - **FR-047**: System MUST record complete input sequences with frame-perfect timing for deterministic replay functionality
 - **FR-048**: System MUST capture and export detailed timing data including per-frame execution metrics, component synchronization, and performance statistics
 - **FR-049**: System MUST provide statistical analysis tools for performance optimization, including bottleneck identification and efficiency metrics
-- **FR-050**: System MUST support data export in multiple formats (CSV, JSON, HDF5, binary) for academic research and analysis tools
+- **FR-050**: System MUST support data export in multiple formats with defined schemas: CSV (timing data with headers: timestamp, component, cycle_count, operation), JSON (structured game state with metadata), HDF5 (hierarchical datasets for large-scale analysis with compression), and binary (compact session recordings with version headers) for academic research and analysis tools
 - **FR-051**: System MUST implement frame-by-frame analysis mode with step-through debugging and state inspection capabilities
 - **FR-052**: System MUST provide input optimization analysis including timing windows, frame-perfect inputs, and efficiency recommendations
 - **FR-053**: System MUST support session recording with complete state capture for reproducible research and speedrun verification
@@ -283,7 +283,7 @@ An emulation researcher or developer needs to validate that the emulator accurat
 - **SC-033**: Input recording captures timing with sub-frame precision (1/60th frame accuracy or better)
 - **SC-034**: Replay functionality achieves 100% deterministic reproduction of recorded sessions
 - **SC-035**: Data export completes within 5 seconds for 1-hour gaming sessions with full metrics
-- **SC-036**: Statistical analysis tools identify performance bottlenecks with 95% accuracy
+- **SC-036**: Statistical analysis tools identify performance bottlenecks with 95% accuracy validated against known test cases, measured by correctly identifying CPU-bound vs PPU-bound vs memory-bound scenarios in standardized benchmark ROMs
 - **SC-037**: Frame-by-frame analysis mode operates without performance degradation in debugging scenarios
 - **SC-038**: Input optimization analysis provides actionable recommendations for 90% of suboptimal input patterns
 - **SC-039**: Session recordings maintain complete fidelity including all internal state changes and timing variations
