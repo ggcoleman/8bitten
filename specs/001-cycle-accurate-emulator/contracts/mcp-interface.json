@@ -1,0 +1,382 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "8Bitten MCP Interface",
+    "description": "Model Context Protocol interface for AI agent interaction with 8Bitten NES emulator",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080/mcp",
+      "description": "Local emulator MCP endpoint"
+    }
+  ],
+  "paths": {
+    "/session": {
+      "post": {
+        "summary": "Create new AI agent session",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Session created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed"
+          }
+        }
+      }
+    },
+    "/session/{sessionId}/input": {
+      "post": {
+        "summary": "Send controller input",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InputCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Input accepted"
+          },
+          "400": {
+            "description": "Invalid input command"
+          },
+          "404": {
+            "description": "Session not found"
+          }
+        }
+      }
+    },
+    "/session/{sessionId}/state": {
+      "get": {
+        "summary": "Get current game state",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current game state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameState"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found"
+          }
+        }
+      }
+    },
+    "/session/{sessionId}/savestate": {
+      "post": {
+        "summary": "Save current emulator state",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveStateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "State saved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveStateResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Load emulator state",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadStateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "State loaded successfully"
+          },
+          "400": {
+            "description": "Invalid state data"
+          }
+        }
+      }
+    },
+    "/session/{sessionId}/metrics": {
+      "get": {
+        "summary": "Get gameplay metrics",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current gameplay metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameplayMetrics"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SessionRequest": {
+        "type": "object",
+        "required": ["authToken", "agentId"],
+        "properties": {
+          "authToken": {
+            "type": "string",
+            "description": "Authentication token for session"
+          },
+          "agentId": {
+            "type": "string",
+            "description": "Unique identifier for AI agent"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["input", "state", "saveload", "metrics"]
+            }
+          }
+        }
+      },
+      "SessionResponse": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "websocketUrl": {
+            "type": "string",
+            "description": "WebSocket URL for real-time communication"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "InputCommand": {
+        "type": "object",
+        "required": ["buttons"],
+        "properties": {
+          "buttons": {
+            "type": "object",
+            "properties": {
+              "a": {"type": "boolean"},
+              "b": {"type": "boolean"},
+              "select": {"type": "boolean"},
+              "start": {"type": "boolean"},
+              "up": {"type": "boolean"},
+              "down": {"type": "boolean"},
+              "left": {"type": "boolean"},
+              "right": {"type": "boolean"}
+            }
+          },
+          "duration": {
+            "type": "integer",
+            "description": "Duration to hold input in frames",
+            "minimum": 1,
+            "maximum": 60
+          }
+        }
+      },
+      "GameState": {
+        "type": "object",
+        "properties": {
+          "frameNumber": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "screenBuffer": {
+            "type": "string",
+            "format": "base64",
+            "description": "Base64 encoded screen pixels (256x240x3)"
+          },
+          "memoryState": {
+            "type": "object",
+            "description": "Relevant memory locations for AI analysis"
+          },
+          "inputState": {
+            "$ref": "#/components/schemas/InputCommand"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SaveStateRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Save state identifier"
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional description"
+          }
+        }
+      },
+      "SaveStateResponse": {
+        "type": "object",
+        "properties": {
+          "saveId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "size": {
+            "type": "integer",
+            "description": "Save state size in bytes"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "LoadStateRequest": {
+        "type": "object",
+        "required": ["saveId"],
+        "properties": {
+          "saveId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "GameplayMetrics": {
+        "type": "object",
+        "properties": {
+          "sessionDuration": {
+            "type": "integer",
+            "description": "Session duration in seconds"
+          },
+          "totalFrames": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "averageFPS": {
+            "type": "number",
+            "format": "float"
+          },
+          "inputRate": {
+            "type": "number",
+            "format": "float",
+            "description": "Actions per second"
+          },
+          "gameSpecific": {
+            "type": "object",
+            "description": "Game-specific metrics (score, lives, etc.)"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ]
+}
