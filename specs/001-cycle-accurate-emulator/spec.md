@@ -58,8 +58,9 @@
 **Language/Version**: C# 13.0 / .NET 9.0 (applications) targeting .NET Standard 2.1 (shared libraries)
 **Primary Dependencies**: MonoGame (graphics), NAudio + OpenTK.Audio (audio), Avalonia UI (GUI), SignalR (MCP), Spectre.Console (CLI)
 **Target Platform**: Windows, macOS, Linux (cross-platform .NET support)
-**Performance Goals**: 60 FPS real-time emulation, <16.67ms input latency, <100ms save state operations
-**Quality Standards**: Cycle-accurate timing, 95% ROM test suite compatibility, 100% deterministic replay
+**Performance Goals**: 60 FPS real-time emulation, <16.67ms input latency (measured from controller input to display output), <100ms save state operations
+**Quality Standards**: Cycle-accurate timing, 95% ROM test suite compatibility (Blargg's CPU tests, PPU tests, APU tests, nestest.nes, cpu_dummy_reads.nes, ppu_vbl_nmi.nes, and apu_test.nes), 100% deterministic replay
+**Hardware Baseline**: Mid-range hardware (Intel i5-8400/AMD Ryzen 5 2600, 8GB RAM, integrated graphics equivalent to Intel UHD 630)
 
 ## Previous Clarifications (Resolved)
 
@@ -234,32 +235,32 @@ An emulation researcher or developer needs to validate that the emulator accurat
 
 ### Edge Cases
 
-- What happens when a ROM attempts to access invalid memory addresses or perform illegal operations?
-- How does the system handle ROMs that use unsupported mappers or hardware configurations? (System displays informative error with mapper identification and suggests alternatives)
-- What occurs when the emulator encounters timing edge cases that stress the synchronization between CPU, PPU, and APU?
-- How does the system respond to corrupted save states or incompatible ROM formats?
-- What happens when the host system cannot maintain 60 FPS performance?
-- How does the system handle invalid or corrupted configuration files?
-- What occurs when the user selects incompatible graphics settings for their hardware?
-- How does the system respond when audio devices are disconnected or changed during gameplay?
-- What happens when the user attempts to apply configuration changes that would cause performance issues?
-- How does the system handle MCP connection failures or invalid AI agent requests?
-- What occurs when an AI agent sends invalid or malformed controller input commands?
-- How does the system respond when multiple AI agents attempt to control the emulator simultaneously?
-- What happens when AI training sessions request game state data faster than the emulator can provide it?
-- How does the system handle missing or incomplete documentation when developers need to understand component behavior?
-- What occurs when documentation becomes outdated due to implementation changes?
+- **Invalid Memory Access**: ROM attempts to access invalid memory addresses → Log warning, return open bus behavior ($00 or last value on bus), continue execution
+- **Unsupported Mappers**: ROMs use unsupported mappers → Display informative error with mapper identification (e.g., "Mapper 5 (MMC5) not supported. Try FCEUX or Mesen."), exit with code 3
+- **Timing Edge Cases**: Synchronization stress between CPU, PPU, APU → Maintain cycle accuracy, log timing violations, provide diagnostic output
+- **Corrupted Save States**: Invalid or incompatible save state files → Display error message, offer to delete corrupted file, continue without loading
+- **Performance Issues**: Host system cannot maintain 60 FPS → Automatically switch to Performance mode, display performance warning overlay
+- **Invalid Configuration**: Corrupted configuration files → Reset to defaults, backup corrupted file with .bak extension, log recovery action
+- **Graphics Incompatibility**: User selects incompatible graphics settings → Validate against hardware capabilities, fallback to safe defaults, warn user
+- **Audio Device Changes**: Audio devices disconnected during gameplay → Pause audio output, attempt reconnection, display audio status indicator
+- **Performance-Breaking Config**: Configuration changes cause performance issues → Validate settings before applying, reject with specific error message
+- **MCP Connection Failures**: AI agent connection issues → Return HTTP 503 Service Unavailable, log connection attempts, implement exponential backoff
+- **Invalid AI Commands**: Malformed controller input from AI agents → Return HTTP 400 Bad Request with validation errors, log invalid attempts
+- **Multiple AI Agents**: Simultaneous control attempts → Implement session-based exclusive access, return HTTP 409 Conflict for concurrent requests
+- **High-Frequency AI Requests**: Game state requests exceed emulation rate → Implement rate limiting (max 60 requests/second), return HTTP 429 Too Many Requests
+- **Missing Documentation**: Incomplete component documentation → Generate placeholder documentation with TODO markers, validate during CI/CD
+- **Outdated Documentation**: Implementation changes without doc updates → Implement automated documentation validation, fail builds on doc-code mismatches
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: NESEmulator MUST accurately emulate the NES CPU (6502) with cycle-perfect timing
-- **FR-002**: NESEmulator MUST accurately emulate the NES PPU (Picture Processing Unit) with proper scanline and pixel timing
-- **FR-003**: NESEmulator MUST accurately emulate the NES APU (Audio Processing Unit) with authentic sound generation
-- **FR-004**: NESEmulator MUST support standard NES cartridge mappers including: NROM (Mapper 0) for basic games, MMC1 (Mapper 1) for bank switching, MMC3 (Mapper 4) for advanced features, UNROM (Mapper 2) for simple bank switching, CNROM (Mapper 3) for character ROM switching, and extensible architecture for additional mappers as needed
-- **FR-005**: NESEmulator MUST maintain synchronized timing between all hardware components (CPU, PPU, APU)
-- **FR-006**: NESEmulator MUST support headless mode (no graphics), command line mode (opens game window), and GUI mode (with configuration interface)
+- **FR-001**: 8Bitten MUST accurately emulate the NES CPU (6502) with cycle-perfect timing
+- **FR-002**: 8Bitten MUST accurately emulate the NES PPU (Picture Processing Unit) with proper scanline and pixel timing
+- **FR-003**: 8Bitten MUST accurately emulate the NES APU (Audio Processing Unit) with authentic sound generation
+- **FR-004**: 8Bitten MUST support standard NES cartridge mappers including: NROM (Mapper 0) for basic games, MMC1 (Mapper 1) for bank switching, MMC3 (Mapper 4) for advanced features, UNROM (Mapper 2) for simple bank switching, CNROM (Mapper 3) for character ROM switching, and extensible architecture for additional mappers as needed
+- **FR-005**: 8Bitten MUST maintain synchronized timing between all hardware components (CPU, PPU, APU)
+- **FR-006**: 8Bitten MUST support headless mode (no graphics), command line mode (opens game window), and GUI mode (with configuration interface)
 - **FR-007**: System MUST accept standard NES ROM file formats (.nes, iNES header format)
 - **FR-008**: System MUST provide save state functionality for preserving and restoring game progress
 - **FR-009**: System MUST support standard NES controller input (8-button gamepad)
@@ -269,9 +270,10 @@ An emulation researcher or developer needs to validate that the emulator accurat
 - **FR-013**: System MUST implement proper power-on and reset behavior matching original hardware including CPU register initialization (PC from reset vector $FFFC-$FFFD, SP=$FD, P=$34), PPU register clearing, APU silence, memory initialization patterns, and reset button functionality with proper timing delays
 - **FR-014**: System MUST support real-time execution at 60 FPS (NTSC timing) with configurable performance modes
 - **FR-015**: System MUST provide comprehensive diagnostic output including CPU state (registers, flags, cycle count), PPU state (scanline, pixel position, VRAM contents), APU state (channel status, sample generation), memory access logs, and timing analysis data in structured formats (JSON, CSV) for debugging and validation purposes
+- **FR-015a**: System MUST measure input latency from controller button press to corresponding pixel change on display, with measurements taken using high-speed camera or oscilloscope validation against reference hardware
 - **FR-016**: System MUST provide configurable graphics options including scaling filters, fullscreen mode, and VSync settings
 - **FR-017**: System MUST provide configurable audio options including sample rate, buffer size, and audio driver selection
-- **FR-018**: System MUST provide three distinct performance modes: (1) Maximum Accuracy mode maintaining cycle-perfect timing with 100% hardware fidelity, (2) Balanced mode allowing minor timing optimizations while preserving gameplay accuracy (99.9% compatibility), and (3) Performance mode prioritizing speed with acceptable accuracy trade-offs (95% compatibility, 2x-4x speed improvement) with real-time mode switching
+- **FR-018**: System MUST provide three distinct performance modes: (1) Maximum Accuracy mode maintaining cycle-perfect timing with 100% hardware fidelity, (2) Balanced mode allowing minor timing optimizations while preserving gameplay accuracy (99.9% compatibility with Blargg's test suite, nestest.nes, cpu_dummy_reads.nes), and (3) Performance mode prioritizing speed with acceptable accuracy trade-offs (95% compatibility with Blargg's test suite and standard test ROMs, 2x-4x speed improvement) with real-time mode switching
 - **FR-019**: System MUST persist user configuration settings between sessions using JSON files in user application data directory
 - **FR-020**: System MUST allow real-time adjustment of settings without requiring emulator restart
 - **FR-021**: System MUST provide MCP (Model Context Protocol) interface for AI agent communication and control with JWT-based authentication including token expiration (24-hour default), refresh token mechanism, role-based access control (read-only, control, admin), rate limiting (100 requests/minute per token), and secure token storage with encryption at rest
