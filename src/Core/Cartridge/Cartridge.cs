@@ -518,7 +518,7 @@ public sealed class GameCartridge : ICartridge
         // Parse additional fields for iNES 1.0
         if (header.Version == INESVersion.Version1)
         {
-            header.PRGRAMBanks = romData[8] == 0 ? 1 : romData[8]; // Default to 1 if 0
+            header.PRGRAMBanks = romData[8] == 0 ? (byte)1 : romData[8]; // Default to 1 if 0
             header.TVSystem = (romData[9] & 0x01) == 0 ? TVSystem.NTSC : TVSystem.PAL;
         }
 
