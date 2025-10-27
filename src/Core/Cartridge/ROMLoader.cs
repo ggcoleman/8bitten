@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EightBitten.Core.Cartridge;
 
@@ -83,8 +85,10 @@ public static class ROMLoader
 
     private static GameCartridge CreateCartridge(byte[] romData)
     {
-        // Create a GameCartridge and load the ROM data
-        var cartridge = new GameCartridge(null!); // Logger will be injected later
+        // Create a GameCartridge with a null logger (for now)
+        // In a full implementation, this would be injected via DI
+        var logger = NullLogger.Instance;
+        var cartridge = new GameCartridge(logger);
 
         if (!cartridge.LoadFromData(romData))
         {
