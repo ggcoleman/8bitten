@@ -4,6 +4,14 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using EightBitten.Infrastructure.Logging;
 using EightBitten.Infrastructure.Configuration;
+using EightBitten.Core.Emulator;
+using EightBitten.Core.PPU;
+using EightBitten.Core.APU;
+using EightBitten.Infrastructure.Platform.Graphics;
+using EightBitten.Infrastructure.Platform.Audio;
+using EightBitten.Infrastructure.Platform.Input;
+using EightBitten.Infrastructure.Metrics;
+using EightBitten.Emulator.Console.CLI;
 using Spectre.Console;
 
 namespace EightBitten.Console.CLI;
@@ -34,24 +42,37 @@ internal static class Program
                     .LeftJustified()
                     .Color(Color.Green));
 
-            AnsiConsole.WriteLine("Cycle-Accurate NES Emulator - CLI Mode");
+            AnsiConsole.WriteLine("Cycle-Accurate NES Emulator - CLI Gaming Mode");
             AnsiConsole.WriteLine();
 
+            // Parse ROM file argument
+            if (args.Length == 0)
+            {
+                AnsiConsole.MarkupLine("[red]Error: ROM file required[/]");
+                AnsiConsole.MarkupLine("Usage: 8Bitten.Console.CLI.exe <rom-file> [options]");
+                return 1;
+            }
+
+            var romPath = args[0];
+            if (!File.Exists(romPath))
+            {
+                AnsiConsole.MarkupLine($"[red]Error: ROM file not found: {romPath}[/]");
+                return 4;
+            }
+
             var host = CreateHostBuilder(args).Build();
-            
+
             using var scope = host.Services.CreateScope();
             var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
             var logger = loggerFactory.CreateLogger("8Bitten.CLI");
-            
+
             #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
-            logger.LogInformation("8Bitten CLI Console starting...");
+            logger.LogInformation("8Bitten CLI Gaming starting with ROM: {RomPath}", romPath);
             #pragma warning restore CA1848
 
-            // TODO: Implement CLI emulation logic
-            AnsiConsole.MarkupLine("[yellow]CLI mode not yet implemented[/]");
-
-            await host.RunAsync().ConfigureAwait(false);
-            return 0;
+            // Run CLI gaming mode
+            var exitCode = await RunCLIGamingAsync(scope.ServiceProvider, romPath, args, logger);
+            return exitCode;
         }
         catch (OperationCanceledException)
         {
@@ -92,10 +113,176 @@ internal static class Program
             {
                 services.AddLogging(context.Configuration);
                 services.AddEmulatorConfiguration(context.Configuration);
-                
-                // TODO: Add emulator services
-                // TODO: Add MonoGame services
+
+                // Add emulator services
+                services.AddSingleton<NESEmulator>();
+                services.AddSingleton<Renderer>();
+                services.AddSingleton<AudioGenerator>();
+
+                // Add platform services
+                services.AddSingleton<MonoGameRenderer>();
+                services.AddSingleton<NAudioRenderer>();
+                services.AddSingleton<InputManager>();
+                services.AddSingleton<WindowManager>();
+                services.AddSingleton<PerformanceMonitor>();
+
+                // Add CLI gaming services
+                services.AddSingleton<GameWindow>();
+                services.AddSingleton<GameLoop>();
             });
+
+    /// <summary>
+    /// Runs the CLI gaming mode with graphics and audio
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency injection</param>
+    /// <param name="romPath">Path to the ROM file</param>
+    /// <param name="args">Command line arguments</param>
+    /// <param name="logger">Logger instance</param>
+    /// <returns>Exit code</returns>
+    private static async Task<int> RunCLIGamingAsync(IServiceProvider serviceProvider, string romPath, string[] args, ILogger logger)
+    {
+        try
+        {
+            AnsiConsole.MarkupLine($"[green]Loading ROM:[/] {Path.GetFileName(romPath)}");
+
+            // Get services
+            var emulator = serviceProvider.GetRequiredService<NESEmulator>();
+            var renderer = serviceProvider.GetRequiredService<Renderer>();
+            var audioGenerator = serviceProvider.GetRequiredService<AudioGenerator>();
+            var windowManager = serviceProvider.GetRequiredService<WindowManager>();
+            var performanceMonitor = serviceProvider.GetRequiredService<PerformanceMonitor>();
+
+            // Parse CLI options
+            var settings = ParseCLIOptions(args);
+
+            // Load ROM
+            try
+            {
+                emulator.LoadROM(romPath);
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine($"[red]Error: Failed to load ROM file: {ex.Message}[/]");
+                return 2;
+            }
+
+            AnsiConsole.MarkupLine("[green]ROM loaded successfully![/]");
+
+            // Create game window
+            var gameWindow = new GameWindow(
+                serviceProvider.GetRequiredService<MonoGameRenderer>(),
+                serviceProvider.GetRequiredService<NAudioRenderer>(),
+                serviceProvider.GetRequiredService<InputManager>(),
+                settings,
+                serviceProvider.GetRequiredService<ILogger<GameWindow>>());
+
+            // Register window
+            if (!windowManager.CreateWindow("main", gameWindow))
+            {
+                AnsiConsole.MarkupLine("[red]Error: Failed to create game window[/]");
+                return 3;
+            }
+
+            // Create game loop
+            var gameLoop = new GameLoop(
+                emulator,
+                gameWindow,
+                renderer,
+                audioGenerator,
+                new GameLoopSettings { AudioEnabled = settings.AudioEnabled },
+                serviceProvider.GetRequiredService<ILogger<GameLoop>>());
+
+            AnsiConsole.MarkupLine("[green]Starting emulation...[/]");
+            AnsiConsole.MarkupLine("[dim]Press ESC to exit[/]");
+
+            // Start performance monitoring
+            if (settings.PerformanceMonitoring)
+            {
+                performanceMonitor.Start();
+            }
+
+            // Start game loop
+            if (!gameLoop.Start())
+            {
+                AnsiConsole.MarkupLine("[red]Error: Failed to start game loop[/]");
+                return 5;
+            }
+
+            // Run the game window
+            gameWindow.Run();
+
+            // Stop game loop
+            await gameLoop.StopAsync();
+
+            // Stop performance monitoring and show stats
+            if (settings.PerformanceMonitoring)
+            {
+                performanceMonitor.Stop();
+                AnsiConsole.WriteLine();
+                AnsiConsole.MarkupLine("[yellow]Performance Statistics:[/]");
+                AnsiConsole.WriteLine(performanceMonitor.GenerateReport());
+            }
+
+            AnsiConsole.MarkupLine("[green]Emulation completed successfully![/]");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error in CLI gaming mode");
+            AnsiConsole.WriteException(ex);
+            return 99;
+        }
+    }
+
+    /// <summary>
+    /// Parses CLI-specific options from command line arguments
+    /// </summary>
+    /// <param name="args">Command line arguments</param>
+    /// <returns>Game window settings</returns>
+    private static GameWindowSettings ParseCLIOptions(string[] args)
+    {
+        var settings = new GameWindowSettings();
+
+        for (int i = 1; i < args.Length; i++)
+        {
+            switch (args[i].ToLowerInvariant())
+            {
+                case "--fullscreen":
+                    settings.IsFullScreen = true;
+                    break;
+                case "--windowed":
+                    settings.IsFullScreen = false;
+                    break;
+                case "--scale":
+                    if (i + 1 < args.Length && float.TryParse(args[i + 1], out var scale))
+                    {
+                        settings.RenderScale = scale;
+                        i++; // Skip next argument
+                    }
+                    break;
+                case "--no-audio":
+                    settings.AudioEnabled = false;
+                    break;
+                case "--vsync":
+                    settings.VSync = true;
+                    break;
+                case "--no-vsync":
+                    settings.VSync = false;
+                    break;
+                case "--performance":
+                    settings.PerformanceMonitoring = true;
+                    break;
+                case "--test-mode":
+                    // Special mode for integration tests
+                    settings.WindowWidth = 512;
+                    settings.WindowHeight = 480;
+                    settings.RenderScale = 2.0f;
+                    break;
+            }
+        }
+
+        return settings;
+    }
 
     /// <summary>
     /// Display comprehensive help information for the 8Bitten NES Emulator CLI
