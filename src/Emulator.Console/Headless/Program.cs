@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using EightBitten.Infrastructure.Logging;
 using EightBitten.Infrastructure.Configuration;
+using EightBitten.Core.Cartridge;
+using System.IO;
 
 namespace EightBitten.Console.Headless;
 
@@ -28,20 +30,55 @@ internal static class Program
                 return 0;
             }
 
+            // Parse and validate ROM file argument
+            var romFilePath = ParseROMFileArgument(args);
+            if (romFilePath == null)
+            {
+                #pragma warning disable CA1303 // Do not pass literals as localized parameters
+                System.Console.WriteLine("Error: ROM file path is required");
+                System.Console.WriteLine("Use --help for usage information");
+                #pragma warning restore CA1303
+                return 1; // General error
+            }
+
+            // Validate ROM file
+            var validationResult = ValidateROMFile(romFilePath);
+            if (!validationResult.IsValid)
+            {
+                System.Console.WriteLine($"Error: {validationResult.ErrorMessage}");
+                return validationResult.ExitCode;
+            }
+
             var host = CreateHostBuilder(args).Build();
-            
+
             using var scope = host.Services.CreateScope();
             var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
             var logger = loggerFactory.CreateLogger("8Bitten.Headless");
-            
+
             #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
             logger.LogInformation("8Bitten Headless Console starting...");
+            logger.LogInformation("ROM file: {ROMFile}", romFilePath);
 
-            // TODO: Implement headless emulation logic
-            logger.LogInformation("Headless mode not yet implemented");
+            // Load and validate ROM
+            var loadResult = await ROMLoader.LoadROMAsync(romFilePath).ConfigureAwait(false);
+
+            if (!loadResult.IsSuccess)
+            {
+                logger.LogError("Failed to load ROM: {Error}", loadResult.ErrorMessage);
+                System.Console.WriteLine($"Error: {loadResult.ErrorMessage}");
+                return GetExitCodeFromLoadError(loadResult.ErrorCode);
+            }
+
+            logger.LogInformation("ROM loaded successfully");
+            logger.LogInformation("Mapper: {Mapper}, PRG: {PRGSize}KB, CHR: {CHRSize}KB",
+                loadResult.Cartridge!.Header.MapperNumber,
+                loadResult.Cartridge.Header.PRGROMSize / 1024,
+                loadResult.Cartridge.Header.CHRROMSize / 1024);
+
+            // TODO: Implement emulation session
+            logger.LogInformation("Emulation session not yet implemented");
             #pragma warning restore CA1848
 
-            await host.RunAsync().ConfigureAwait(false);
             return 0;
         }
         catch (OperationCanceledException)
@@ -158,4 +195,85 @@ internal static class Program
         System.Console.WriteLine("For more information, visit: https://github.com/ggcoleman/8bitten");
     }
     #pragma warning restore CA1303
+
+    /// <summary>
+    /// Parse ROM file path from command line arguments
+    /// </summary>
+    /// <param name="args">Command line arguments</param>
+    /// <returns>ROM file path or null if not found</returns>
+    private static string? ParseROMFileArgument(string[] args)
+    {
+        // Look for the first argument that doesn't start with -- and has .nes extension
+        foreach (var arg in args)
+        {
+            if (!arg.StartsWith("--", StringComparison.Ordinal) && !arg.StartsWith('-'))
+            {
+                return arg;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Validate ROM file exists and has correct extension
+    /// </summary>
+    /// <param name="romFilePath">ROM file path</param>
+    /// <returns>Validation result</returns>
+    private static ROMFileValidationResult ValidateROMFile(string romFilePath)
+    {
+        // Check if file exists
+        if (!File.Exists(romFilePath))
+        {
+            return new ROMFileValidationResult(false, "File not found", 4); // I/O error
+        }
+
+        // Check file extension
+        var extension = Path.GetExtension(romFilePath).ToUpperInvariant();
+        if (extension != ".NES")
+        {
+            return new ROMFileValidationResult(false,
+                $"Invalid file extension '{extension}' - only .nes files are supported", 2); // Invalid ROM
+        }
+
+        // Check if file is readable
+        try
+        {
+            using var fileStream = File.OpenRead(romFilePath);
+            // File is readable
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return new ROMFileValidationResult(false, "Access denied - file is not readable", 4); // I/O error
+        }
+        catch (IOException ex)
+        {
+            return new ROMFileValidationResult(false, $"I/O error: {ex.Message}", 4); // I/O error
+        }
+
+        return new ROMFileValidationResult(true, null, 0);
+    }
+
+    /// <summary>
+    /// Map ROM load error code to exit code
+    /// </summary>
+    /// <param name="loadErrorCode">ROM load error code</param>
+    /// <returns>Exit code</returns>
+    private static int GetExitCodeFromLoadError(ROMLoadErrorCode loadErrorCode)
+    {
+        return loadErrorCode switch
+        {
+            ROMLoadErrorCode.InvalidPath => 2,
+            ROMLoadErrorCode.InvalidExtension => 2,
+            ROMLoadErrorCode.InvalidHeader => 2,
+            ROMLoadErrorCode.UnsupportedMapper => 3,
+            ROMLoadErrorCode.FileNotFound => 4,
+            ROMLoadErrorCode.IOError => 4,
+            _ => 1 // General error
+        };
+    }
+
+    /// <summary>
+    /// ROM file validation result
+    /// </summary>
+    private sealed record ROMFileValidationResult(bool IsValid, string? ErrorMessage, int ExitCode);
 }
