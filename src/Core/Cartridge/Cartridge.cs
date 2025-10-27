@@ -143,20 +143,39 @@ public sealed class GameCartridge : ICartridge
     {
         try
         {
-            // Parse iNES header and load ROM data
-            // This is a simplified implementation - in reality we'd parse the full iNES format
-            if (romData.Length < 16) return false; // Minimum header size
+            // Use the comprehensive ROM validation first
+            var validationResult = ROMValidator.ValidateROM(romData.ToArray());
+            if (!validationResult.IsValid)
+            {
+                #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                _logger.LogWarning("ROM validation failed: {Error}", validationResult.ErrorMessage);
+                #pragma warning restore CA1848
+                return false;
+            }
 
-            // For now, just create a basic header and load the data
-            var header = new CartridgeHeader();
-            var prgData = romData.Slice(16).ToArray(); // Skip header
-            var chrData = Array.Empty<byte>(); // Simplified
+            // Parse iNES header properly
+            var header = ParseINESHeader(romData);
+
+            // Calculate data offsets
+            var headerSize = 16;
+            var trainerSize = header.HasTrainer ? 512 : 0;
+            var prgRomStart = headerSize + trainerSize;
+            var prgRomSize = header.PRGROMBanks * 16384; // 16KB per bank
+            var chrRomStart = prgRomStart + prgRomSize;
+            var chrRomSize = header.CHRROMBanks * 8192; // 8KB per bank
+
+            // Extract ROM data
+            var prgData = romData.Slice(prgRomStart, prgRomSize).ToArray();
+            var chrData = chrRomSize > 0 ? romData.Slice(chrRomStart, chrRomSize).ToArray() : Array.Empty<byte>();
 
             LoadROM(header, prgData, chrData);
             return true;
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NotSupportedException)
         {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogError(ex, "Failed to load ROM data");
+            #pragma warning restore CA1848
             return false;
         }
     }
@@ -462,6 +481,48 @@ public sealed class GameCartridge : ICartridge
     {
         UnloadROM();
         GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Parse iNES header from ROM data
+    /// </summary>
+    /// <param name="romData">ROM data</param>
+    /// <returns>Parsed cartridge header</returns>
+    private static CartridgeHeader ParseINESHeader(ReadOnlySpan<byte> romData)
+    {
+        var header = new CartridgeHeader();
+
+        // Parse iNES header (16 bytes)
+        header.Signature = (uint)(romData[0] | (romData[1] << 8) | (romData[2] << 16) | (romData[3] << 24));
+        header.PRGROMBanks = romData[4];
+        header.CHRROMBanks = romData[5];
+        header.MapperLow = romData[6];
+        header.MapperHigh = romData[7];
+
+        // Parse flags
+        header.Mirroring = (romData[6] & 0x01) == 0 ? MirroringMode.Horizontal : MirroringMode.Vertical;
+        header.HasBattery = (romData[6] & 0x02) != 0;
+        header.HasTrainer = (romData[6] & 0x04) != 0;
+        header.FourScreenMirroring = (romData[6] & 0x08) != 0;
+
+        // Determine iNES version
+        if ((romData[7] & 0x0C) == 0x08)
+        {
+            header.Version = INESVersion.Version2;
+        }
+        else
+        {
+            header.Version = INESVersion.Version1;
+        }
+
+        // Parse additional fields for iNES 1.0
+        if (header.Version == INESVersion.Version1)
+        {
+            header.PRGRAMBanks = romData[8] == 0 ? 1 : romData[8]; // Default to 1 if 0
+            header.TVSystem = (romData[9] & 0x01) == 0 ? TVSystem.NTSC : TVSystem.PAL;
+        }
+
+        return header;
     }
 
     /// <summary>
