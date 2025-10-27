@@ -28,7 +28,7 @@
 ### 🎯 Implementation Strategy
 **MVP Scope**: User Story 1 (Headless ROM Execution) - Foundation for all features
 **Delivery Approach**: Incremental delivery by user story priority with research-grade quality standards
-**Total Remaining Tasks**: 89 tasks across 8 user stories + 10 code quality tasks (127 total tasks including 38 completed infrastructure and ROM loading tasks)
+**Total Remaining Tasks**: 91 tasks across 8 user stories + 10 code quality tasks (129 total tasks including 38 completed infrastructure and ROM loading tasks)
 **Quality Gates**: TDD approach with comprehensive testing at each phase
 **Architecture**: Component-based design with clear interfaces and dependency injection
 **Code Quality**: Full compliance with Microsoft .NET Code Analysis Rules (CA1000-CA5999, IL3000-IL3005)
@@ -364,6 +364,7 @@ All code must pass Microsoft's comprehensive static analysis rules without warni
 - [ ] T115 [P] Implement real-time configuration changes (FR-020) in src/Infrastructure/Configuration/RealTimeConfigUpdater.cs
 - [ ] T116 [P] Add graphics scaling and VSync options (FR-016) in src/Infrastructure/Platform/Graphics/GraphicsOptions.cs
 - [ ] T117 [P] Implement audio configuration options (FR-017) in src/Infrastructure/Platform/Audio/AudioOptions.cs
+- [ ] T118 [P] Implement input latency measurement framework (FR-015a) in src/Infrastructure/Metrics/InputLatencyMeasurer.cs
 
 ### 🧪 Comprehensive Testing
 - [ ] T070 [P] Create end-to-end integration test suite in tests/Integration/EndToEnd/
@@ -429,6 +430,7 @@ All code must pass Microsoft's comprehensive static analysis rules without warni
 ### 🧪 Testing Tasks (TDD Approach)
 - [ ] T099 [P] [US6] Create metrics collection unit tests in tests/Unit/Infrastructure/Metrics/ResearchMetricsTests.cs
 - [ ] T100 [P] [US6] Create data export integration tests in tests/Integration/Interfaces/Research/DataExportTests.cs
+- [ ] T119 [P] [US6] Create data export format validation (FR-050) in tests/Unit/Interfaces/Research/DataFormatValidationTests.cs
 
 ## Phase 10: User Story 7 - Speedrunning Optimization and Analysis (Priority P7)
 
@@ -487,7 +489,7 @@ All code must pass Microsoft's comprehensive static analysis rules without warni
 - **Independent Test**: Launch GUI, modify settings, verify persistence
 - **Dependencies**: Requires Phase 3 completion
 
-**Polish (Phase 6)**: Cross-cutting concerns (8 tasks)
+**Polish (Phase 6)**: Cross-cutting concerns (9 tasks)
 - Performance optimization, comprehensive testing, production readiness
 - **Dependencies**: Can run parallel with Phase 4 and Phase 5
 
@@ -501,7 +503,7 @@ All code must pass Microsoft's comprehensive static analysis rules without warni
 - **Independent Test**: Review documentation completeness and accuracy
 - **Dependencies**: Can run parallel with any phase
 
-**Research (Phase 9)**: User Story 6 - Academic Research and Analysis (8 tasks)
+**Research (Phase 9)**: User Story 6 - Academic Research and Analysis (9 tasks)
 - Metrics collection, data export, session recording, statistical analysis
 - **Independent Test**: Conduct research session with comprehensive data collection
 - **Dependencies**: Requires Phase 3 completion
@@ -568,7 +570,7 @@ Every task strictly follows the format: `- [ ] [TaskID] [P?] [Story?] Descriptio
 
 **Format Components Verified**:
 - ✅ **Checkbox**: All tasks start with `- [ ]`
-- ✅ **Task ID**: Sequential numbering (T001-T073)
+- ✅ **Task ID**: Sequential numbering (T001-T119)
 - ✅ **[P] marker**: Included only for parallelizable tasks
 - ✅ **[Story] label**: Required for user story phases (US1, US2, US3)
 - ✅ **File paths**: Exact file paths included in all descriptions
