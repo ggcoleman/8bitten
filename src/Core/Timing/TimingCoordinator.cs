@@ -190,11 +190,25 @@ public class TimingCoordinator : IDisposable
         {
             _masterCycles++;
 
+            // Debug: Log first few cycles
+            if (_masterCycles <= 10)
+            {
+                #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                _logger.LogInformation("Timing cycle {Cycle}, components: {Count}", _masterCycles, _components.Count);
+                #pragma warning restore CA1848
+            }
+
             // Update all registered components
             foreach (var component in _components)
             {
                 if (component.IsEnabled)
                 {
+                    if (_masterCycles <= 10)
+                    {
+                        #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                        _logger.LogInformation("Synchronizing component: {Name}", component.Name);
+                        #pragma warning restore CA1848
+                    }
                     component.SynchronizeClock(_masterCycles);
                 }
             }

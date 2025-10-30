@@ -41,7 +41,7 @@ public sealed class NESEmulator : IEmulator
     /// <summary>
     /// Current frame number
     /// </summary>
-    public long FrameNumber => _timing.Statistics.MasterCycles / (262 * 341); // Approximate frame count
+    public long FrameNumber => _timing.Statistics.MasterCycles / ((262 * 341) / 3); // CPU cycles per frame = PPU cycles / 3
 
     /// <summary>
     /// Total cycle count
@@ -94,7 +94,12 @@ public sealed class NESEmulator : IEmulator
         // Wire up events
         _timing.FrameCompleted += OnTimingFrameCompleted;
         _ppu.FrameCompleted += OnPPUFrameCompleted;
+        _ppu.VBlankStarted += OnPPUVBlankStarted; // Connect PPU VBlank to CPU NMI
         _cpu.InterruptRequested += OnCPUInterruptRequested;
+
+        #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+        _logger.LogInformation("NESEmulator events wired up - PPU VBlank event connected");
+        #pragma warning restore CA1848
     }
 
     /// <summary>
@@ -108,6 +113,11 @@ public sealed class NESEmulator : IEmulator
         try
         {
             // Initialize all components (components are initialized via dependency injection)
+
+            // Initialize components before registering with timing coordinator
+            _cpu.Initialize();
+            _ppu.Initialize();
+            _apu.Initialize();
 
             // Register components with timing coordinator
             _timing.RegisterComponent(_cpu);
@@ -319,10 +329,18 @@ public sealed class NESEmulator : IEmulator
         try
         {
             SetState(EmulatorState.Running);
+
+            // Reset all components to ensure clean state
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogInformation("NESEmulator: Starting emulation - resetting all components first");
+            #pragma warning restore CA1848
+
+            Reset();
+
             _timing.Start();
 
             #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
-            _logger.LogInformation("Emulation started");
+            _logger.LogInformation("Emulation started successfully");
             #pragma warning restore CA1848
         }
         catch (Exception ex)
@@ -391,6 +409,10 @@ public sealed class NESEmulator : IEmulator
     {
         try
         {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogInformation("NESEmulator: Resetting all components - CPU, PPU, APU, Memory Maps, Cartridge");
+            #pragma warning restore CA1848
+
             _cpu.Reset();
             _ppu.Reset();
             _apu.Reset();
@@ -400,7 +422,7 @@ public sealed class NESEmulator : IEmulator
             _timing.Reset();
 
             #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
-            _logger.LogDebug("Emulator reset");
+            _logger.LogInformation("NESEmulator: Reset completed successfully");
             #pragma warning restore CA1848
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
@@ -417,16 +439,82 @@ public sealed class NESEmulator : IEmulator
     /// </summary>
     public void ExecuteFrame()
     {
+        try
+        {
+            // Debug: Log ExecuteFrame call and conditions
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogDebug("*** ExecuteFrame called: Initialized={Initialized}, Cartridge={Cartridge}, State={State} ***",
+                _isInitialized, _cartridge != null ? "Loaded" : "NULL", _state);
+            #pragma warning restore CA1848
+        }
+        catch (NullReferenceException ex)
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogError("*** ExecuteFrame NULL REFERENCE: {Exception} ***", ex.Message);
+            #pragma warning restore CA1848
+        }
+        catch (InvalidOperationException ex)
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogError("*** ExecuteFrame INVALID OPERATION: {Exception} ***", ex.Message);
+            #pragma warning restore CA1848
+        }
+
         if (!_isInitialized || _cartridge == null)
+        {
+            try
+            {
+                #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                _logger.LogWarning("*** ExecuteFrame EARLY RETURN: Initialized={Initialized}, Cartridge={Cartridge} ***",
+                    _isInitialized, _cartridge != null ? "Loaded" : "NULL");
+                #pragma warning restore CA1848
+            }
+            catch (NullReferenceException ex)
+            {
+                #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                _logger.LogError("*** ExecuteFrame EARLY RETURN NULL REFERENCE: {Exception} ***", ex.Message);
+                #pragma warning restore CA1848
+            }
+            catch (InvalidOperationException ex)
+            {
+                #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                _logger.LogError("*** ExecuteFrame EARLY RETURN INVALID OPERATION: {Exception} ***", ex.Message);
+                #pragma warning restore CA1848
+            }
             return;
+        }
 
         try
         {
-            // Execute one frame worth of cycles
-            var targetCycles = 262 * 341; // NTSC frame cycles
-            for (int i = 0; i < targetCycles && _state == EmulatorState.Running; i++)
+            // Execute until PPU completes a full frame (use PPU's actual frame number)
+            // This allows the PPU to naturally complete all 341 cycles per scanline
+            var startingFrame = _ppu.CurrentState.Frame;
+            var cycleCount = 0;
+            const int maxCycles = 100000; // Safety limit to prevent infinite loops (increased for PPU frame completion)
+
+            // Debug: Log frame execution for first few frames
+            if (startingFrame < 3)
+            {
+                #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                _logger.LogInformation("*** PPU-BASED ExecuteFrame: Starting PPU Frame {Frame}, will run until PPU frame advances, state: {State} ***",
+                    startingFrame, _state);
+                #pragma warning restore CA1848
+            }
+
+            // Execute cycles until the PPU frame advances or we hit the safety limit
+            while (_ppu.CurrentState.Frame == startingFrame && _state == EmulatorState.Running && cycleCount < maxCycles)
             {
                 _timing.ExecuteCycle();
+                cycleCount++;
+            }
+
+            // Debug: Log completion for first few frames
+            if (startingFrame < 3)
+            {
+                #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                _logger.LogInformation("*** PPU-BASED ExecuteFrame: Completed PPU Frame {StartFrame} -> {EndFrame}, executed {Cycles} cycles ***",
+                    startingFrame, _ppu.CurrentState.Frame, cycleCount);
+                #pragma warning restore CA1848
             }
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
@@ -502,6 +590,38 @@ public sealed class NESEmulator : IEmulator
     private void OnPPUFrameCompleted(object? sender, FrameCompletedEventArgs e)
     {
         // PPU frame completed - could trigger additional logic here
+    }
+
+    /// <summary>
+    /// Handle PPU VBlank started event - trigger CPU NMI
+    /// </summary>
+    private void OnPPUVBlankStarted(object? sender, VBlankEventArgs e)
+    {
+        var ppuCtrl = _ppu.CurrentState.Control;
+        bool nmiEnabled = (ppuCtrl & PPUControl.NMIEnable) != 0;
+
+        // Early-boot safety: for the first few frames, request NMI even if NMIEnable isn't set.
+        // Many games rely on an early NMI to kick their init path; this helps them proceed to enable PPU rendering.
+        bool earlyBoot = e.Frame <= 3;
+
+        if (nmiEnabled || earlyBoot)
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogDebug("NESEmulator: PPU VBlank (frame {Frame}) - Requesting CPU NMI (Enabled={Enabled}, EarlyBoot={Early})", e.Frame, nmiEnabled, earlyBoot);
+            #pragma warning restore CA1848
+
+            _cpu.RequestInterrupt(InterruptType.NMI);
+
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogDebug("NESEmulator: CPU NMI requested successfully for frame {Frame}", e.Frame);
+            #pragma warning restore CA1848
+        }
+        else
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogDebug("NESEmulator: PPU VBlank (frame {Frame}) - NMI suppressed (PPUCTRL.NMIEnable = 0)", e.Frame);
+            #pragma warning restore CA1848
+        }
     }
 
     /// <summary>

@@ -5,6 +5,12 @@ using Microsoft.Extensions.Configuration;
 using EightBitten.Infrastructure.Logging;
 using EightBitten.Infrastructure.Configuration;
 using EightBitten.Core.Cartridge;
+using EightBitten.Core.Emulator;
+using EightBitten.Core.CPU;
+using EightBitten.Core.PPU;
+using EightBitten.Core.APU;
+using EightBitten.Core.Memory;
+using EightBitten.Core.Timing;
 using System.IO;
 
 namespace EightBitten.Console.Headless;
@@ -41,6 +47,9 @@ internal static class Program
                 return 1; // General error
             }
 
+            // Parse frames argument
+            var frameCount = ParseFramesArgument(args);
+
             // Validate ROM file
             var validationResult = ValidateROMFile(romFilePath);
             if (!validationResult.IsValid)
@@ -75,8 +84,78 @@ internal static class Program
                 loadResult.Cartridge.Header.PRGROMSize / 1024,
                 loadResult.Cartridge.Header.CHRROMSize / 1024);
 
-            // TODO: Implement emulation session
-            logger.LogInformation("Emulation session not yet implemented");
+            // Create a simple headless emulation session to test timing
+            logger.LogInformation("Starting headless emulation session...");
+
+            try
+            {
+                // Create emulator components (similar to CLI but headless)
+                var services = new ServiceCollection();
+                services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Information));
+
+                // Add core emulator services
+                services.AddSingleton<TimingCoordinator>();
+                services.AddSingleton<CPU6502>();
+                services.AddSingleton<Core.PPU.PictureProcessingUnit>(provider =>
+                {
+                    var ppuLogger = provider.GetRequiredService<ILogger<Core.PPU.PictureProcessingUnit>>();
+                    var memoryMap = provider.GetRequiredService<IPPUMemoryMap>();
+                    return new Core.PPU.PictureProcessingUnit(ppuLogger, memoryMap, headless: true); // Headless mode!
+                });
+                services.AddSingleton<Core.APU.AudioProcessingUnit>();
+                services.AddSingleton<ICPUMemoryMap, CPUMemoryMap>();
+                services.AddSingleton<IPPUMemoryMap, PPUMemoryMap>();
+                services.AddSingleton<NESEmulator>(provider =>
+                {
+                    var emulatorLogger = provider.GetRequiredService<ILogger<NESEmulator>>();
+                    var timing = provider.GetRequiredService<TimingCoordinator>();
+                    var cpu = provider.GetRequiredService<CPU6502>();
+                    var ppu = provider.GetRequiredService<Core.PPU.PictureProcessingUnit>();
+                    var apu = provider.GetRequiredService<Core.APU.AudioProcessingUnit>();
+                    var cpuMemoryMap = provider.GetRequiredService<ICPUMemoryMap>();
+                    var ppuMemoryMap = provider.GetRequiredService<IPPUMemoryMap>();
+                    return new NESEmulator(emulatorLogger, timing, cpu, ppu, apu, cpuMemoryMap, ppuMemoryMap, headless: true);
+                });
+
+                var serviceProvider = services.BuildServiceProvider();
+                var emulator = serviceProvider.GetRequiredService<NESEmulator>();
+
+                // Initialize and load ROM
+                emulator.Initialize();
+
+                // Load ROM data directly (convert cartridge back to ROM data)
+                var romPath = args[0]; // First argument is the ROM file path
+                emulator.LoadROM(romPath);
+
+                emulator.Reset();
+
+                #pragma warning disable CA1849 // Do not call synchronous methods in async context
+                emulator.Start();
+                #pragma warning restore CA1849
+
+                logger.LogInformation("Emulator initialized successfully - running emulator to see PPU advancement...");
+
+                // Run the emulator for the specified number of frames
+                logger.LogInformation("Running emulator for {FrameCount} frames...", frameCount);
+                for (int frame = 0; frame < frameCount; frame++)
+                {
+                    logger.LogInformation("Executing frame {Frame}...", frame);
+                    emulator.ExecuteFrame();
+
+                    logger.LogInformation("Frame {Frame} completed", frame);
+                }
+
+                logger.LogInformation("Multiple frame execution completed!");
+                logger.LogInformation("Emulator state: Frame={Frame}, Cycles={Cycles}", emulator.FrameNumber, emulator.CycleCount);
+            }
+            #pragma warning disable CA1031 // Do not catch general exception types
+            catch (Exception emulatorEx)
+            #pragma warning restore CA1031
+            {
+                logger.LogError(emulatorEx, "Error during headless emulation");
+                return 97;
+            }
+
             #pragma warning restore CA1848
 
             return 0;
@@ -212,6 +291,23 @@ internal static class Program
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// Parse frames argument from command line arguments
+    /// </summary>
+    /// <param name="args">Command line arguments</param>
+    /// <returns>Number of frames to execute (default: 1)</returns>
+    private static int ParseFramesArgument(string[] args)
+    {
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i] == "--frames" && int.TryParse(args[i + 1], out int frameCount))
+            {
+                return Math.Max(1, frameCount); // Ensure at least 1 frame
+            }
+        }
+        return 1; // Default to 1 frame
     }
 
     /// <summary>

@@ -243,10 +243,10 @@ public sealed class GameLoop : IDisposable
             // Step emulator for one frame
             _emulator.StepFrame();
 
-            // Generate graphics
+            // Generate graphics from PPU
             var frameData = _renderer.RenderFrame();
-            
-            // Render to window
+
+            // Send frame data to MonoGame renderer and render to window
             _gameWindow.RenderFrame(frameData);
 
             // Generate audio

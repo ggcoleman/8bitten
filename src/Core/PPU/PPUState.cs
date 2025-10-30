@@ -155,7 +155,7 @@ public class PPUState : ComponentState
         WriteToggle = false;
         DataBuffer = 0;
         
-        Scanline = 241; // Start in VBlank
+        Scanline = 0; // Start at beginning of frame, not in VBlank
         Cycle = 0;
         Frame = 0;
         OddFrame = false;

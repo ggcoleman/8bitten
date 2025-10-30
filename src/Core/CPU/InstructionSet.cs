@@ -10,37 +10,37 @@ public enum InstructionType
 {
     // Load/Store Operations
     LDA, LDX, LDY, STA, STX, STY,
-    
+
     // Register Transfers
     TAX, TAY, TXA, TYA, TSX, TXS,
-    
+
     // Stack Operations
     PHA, PHP, PLA, PLP,
-    
+
     // Logical Operations
     AND, EOR, ORA, BIT,
-    
+
     // Arithmetic Operations
     ADC, SBC, CMP, CPX, CPY,
-    
+
     // Increment/Decrement
     INC, INX, INY, DEC, DEX, DEY,
-    
+
     // Shifts
     ASL, LSR, ROL, ROR,
-    
+
     // Jumps & Calls
     JMP, JSR, RTS,
-    
+
     // Branches
     BCC, BCS, BEQ, BMI, BNE, BPL, BVC, BVS,
-    
+
     // Status Flag Changes
     CLC, CLD, CLI, CLV, SEC, SED, SEI,
-    
+
     // System Functions
     BRK, NOP, RTI,
-    
+
     // Illegal/Undocumented Instructions
     LAX, SAX, DCP, ISC, RLA, RRA, SLO, SRE,
     AHX, SHY, SHX, TAS, XAA, AXS, LAS, KIL
@@ -299,6 +299,93 @@ public static class InstructionSet
         Instructions[0x38] = new(InstructionType.SEC, AddressingMode.Implied, 2);
         Instructions[0xF8] = new(InstructionType.SED, AddressingMode.Implied, 2);
         Instructions[0x78] = new(InstructionType.SEI, AddressingMode.Implied, 2);
+
+        // Arithmetic Operations
+        Instructions[0xC9] = new(InstructionType.CMP, AddressingMode.Immediate, 2);
+        Instructions[0xC5] = new(InstructionType.CMP, AddressingMode.ZeroPage, 3);
+        Instructions[0xD5] = new(InstructionType.CMP, AddressingMode.ZeroPageX, 4);
+        Instructions[0xCD] = new(InstructionType.CMP, AddressingMode.Absolute, 4);
+        Instructions[0xDD] = new(InstructionType.CMP, AddressingMode.AbsoluteX, 4, true);
+        Instructions[0xD9] = new(InstructionType.CMP, AddressingMode.AbsoluteY, 4, true);
+        // ADC (Add with Carry)
+        Instructions[0x69] = new(InstructionType.ADC, AddressingMode.Immediate, 2);
+        Instructions[0x65] = new(InstructionType.ADC, AddressingMode.ZeroPage, 3);
+        Instructions[0x75] = new(InstructionType.ADC, AddressingMode.ZeroPageX, 4);
+        Instructions[0x6D] = new(InstructionType.ADC, AddressingMode.Absolute, 4);
+        Instructions[0x7D] = new(InstructionType.ADC, AddressingMode.AbsoluteX, 4, true);
+        Instructions[0x79] = new(InstructionType.ADC, AddressingMode.AbsoluteY, 4, true);
+        Instructions[0x61] = new(InstructionType.ADC, AddressingMode.IndexedIndirect, 6);
+        Instructions[0x71] = new(InstructionType.ADC, AddressingMode.IndirectIndexed, 5, true);
+
+        // SBC (Subtract with Carry)
+        Instructions[0xE9] = new(InstructionType.SBC, AddressingMode.Immediate, 2);
+        Instructions[0xE5] = new(InstructionType.SBC, AddressingMode.ZeroPage, 3);
+        Instructions[0xF5] = new(InstructionType.SBC, AddressingMode.ZeroPageX, 4);
+        Instructions[0xED] = new(InstructionType.SBC, AddressingMode.Absolute, 4);
+        Instructions[0xFD] = new(InstructionType.SBC, AddressingMode.AbsoluteX, 4, true);
+        Instructions[0xF9] = new(InstructionType.SBC, AddressingMode.AbsoluteY, 4, true);
+        Instructions[0xE1] = new(InstructionType.SBC, AddressingMode.IndexedIndirect, 6);
+        Instructions[0xF1] = new(InstructionType.SBC, AddressingMode.IndirectIndexed, 5, true);
+
+        // INC/DEC (memory)
+        Instructions[0xE6] = new(InstructionType.INC, AddressingMode.ZeroPage, 5);
+        Instructions[0xF6] = new(InstructionType.INC, AddressingMode.ZeroPageX, 6);
+        Instructions[0xEE] = new(InstructionType.INC, AddressingMode.Absolute, 6);
+        Instructions[0xFE] = new(InstructionType.INC, AddressingMode.AbsoluteX, 7);
+
+        Instructions[0xC6] = new(InstructionType.DEC, AddressingMode.ZeroPage, 5);
+        Instructions[0xD6] = new(InstructionType.DEC, AddressingMode.ZeroPageX, 6);
+        Instructions[0xCE] = new(InstructionType.DEC, AddressingMode.Absolute, 6);
+        Instructions[0xDE] = new(InstructionType.DEC, AddressingMode.AbsoluteX, 7);
+
+        // ROL/ROR
+        Instructions[0x2A] = new(InstructionType.ROL, AddressingMode.Accumulator, 2);
+        Instructions[0x26] = new(InstructionType.ROL, AddressingMode.ZeroPage, 5);
+        Instructions[0x36] = new(InstructionType.ROL, AddressingMode.ZeroPageX, 6);
+        Instructions[0x2E] = new(InstructionType.ROL, AddressingMode.Absolute, 6);
+        Instructions[0x3E] = new(InstructionType.ROL, AddressingMode.AbsoluteX, 7);
+
+        Instructions[0x6A] = new(InstructionType.ROR, AddressingMode.Accumulator, 2);
+        Instructions[0x66] = new(InstructionType.ROR, AddressingMode.ZeroPage, 5);
+        Instructions[0x76] = new(InstructionType.ROR, AddressingMode.ZeroPageX, 6);
+        Instructions[0x6E] = new(InstructionType.ROR, AddressingMode.Absolute, 6);
+        Instructions[0x7E] = new(InstructionType.ROR, AddressingMode.AbsoluteX, 7);
+
+        // CPX/CPY
+        Instructions[0xE0] = new(InstructionType.CPX, AddressingMode.Immediate, 2);
+        Instructions[0xE4] = new(InstructionType.CPX, AddressingMode.ZeroPage, 3);
+        Instructions[0xEC] = new(InstructionType.CPX, AddressingMode.Absolute, 4);
+
+        Instructions[0xC0] = new(InstructionType.CPY, AddressingMode.Immediate, 2);
+        Instructions[0xC4] = new(InstructionType.CPY, AddressingMode.ZeroPage, 3);
+        Instructions[0xCC] = new(InstructionType.CPY, AddressingMode.Absolute, 4);
+
+        Instructions[0xC1] = new(InstructionType.CMP, AddressingMode.IndexedIndirect, 6);
+        Instructions[0xD1] = new(InstructionType.CMP, AddressingMode.IndirectIndexed, 5, true);
+
+        // Shifts
+        Instructions[0x0A] = new(InstructionType.ASL, AddressingMode.Accumulator, 2);
+        Instructions[0x06] = new(InstructionType.ASL, AddressingMode.ZeroPage, 5);
+        Instructions[0x16] = new(InstructionType.ASL, AddressingMode.ZeroPageX, 6);
+        Instructions[0x0E] = new(InstructionType.ASL, AddressingMode.Absolute, 6);
+        Instructions[0x1E] = new(InstructionType.ASL, AddressingMode.AbsoluteX, 7);
+
+        // Increment/Decrement
+        Instructions[0xE8] = new(InstructionType.INX, AddressingMode.Implied, 2);
+        Instructions[0xC8] = new(InstructionType.INY, AddressingMode.Implied, 2);
+        Instructions[0xCA] = new(InstructionType.DEX, AddressingMode.Implied, 2);
+        Instructions[0x88] = new(InstructionType.DEY, AddressingMode.Implied, 2);
+
+        // Control Flow
+        Instructions[0x4C] = new(InstructionType.JMP, AddressingMode.Absolute, 3);
+        Instructions[0x6C] = new(InstructionType.JMP, AddressingMode.Indirect, 5);
+
+        // Shifts (continued)
+        Instructions[0x4A] = new(InstructionType.LSR, AddressingMode.Accumulator, 2);
+        Instructions[0x46] = new(InstructionType.LSR, AddressingMode.ZeroPage, 5);
+        Instructions[0x56] = new(InstructionType.LSR, AddressingMode.ZeroPageX, 6);
+        Instructions[0x4E] = new(InstructionType.LSR, AddressingMode.Absolute, 6);
+        Instructions[0x5E] = new(InstructionType.LSR, AddressingMode.AbsoluteX, 7);
 
         // Add more instructions as needed...
         // This is a partial implementation - T021 will complete the full instruction set

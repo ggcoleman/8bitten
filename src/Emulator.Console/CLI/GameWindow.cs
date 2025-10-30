@@ -2,6 +2,9 @@ using System;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using EightBitten.Core.Contracts;
+using EightBitten.Core.Emulator;
+using EightBitten.Core.PPU;
 using EightBitten.Infrastructure.Platform.Graphics;
 using EightBitten.Infrastructure.Platform.Audio;
 using EightBitten.Infrastructure.Platform.Input;
@@ -24,6 +27,9 @@ public sealed class GameWindow : Game, IGameWindow
     private SpriteBatch? _spriteBatch;
     private bool _isInitialized;
     private bool _disposed;
+
+    private IEmulator? _emulator;
+    private Renderer? _coreRenderer;
 
     /// <summary>
     /// Gets whether the game window is initialized
@@ -70,6 +76,16 @@ public sealed class GameWindow : Game, IGameWindow
         // Subscribe to input events
         _inputManager.InputStateChanged += OnInputStateChanged;
 
+        // Initialize graphics device manager (must be done in constructor for MonoGame)
+        _graphics = new GraphicsDeviceManager(this);
+        _graphics.PreferredBackBufferWidth = _settings.WindowWidth;
+        _graphics.PreferredBackBufferHeight = _settings.WindowHeight;
+        _graphics.IsFullScreen = _settings.IsFullScreen;
+        _graphics.SynchronizeWithVerticalRetrace = _settings.VSync;
+
+        #pragma warning disable CA1303 // Do not pass literals as localized parameters
+        System.Console.WriteLine("*** MONOGAME: GameWindow constructor completed ***");
+        #pragma warning restore CA1303
         _logger.LogDebug("GameWindow created");
     }
 
@@ -80,15 +96,13 @@ public sealed class GameWindow : Game, IGameWindow
     {
         try
         {
+            #pragma warning disable CA1303 // Do not pass literals as localized parameters
+            System.Console.WriteLine("*** MONOGAME: Initialize() called ***");
+            #pragma warning restore CA1303
             _logger.LogInformation("Initializing game window");
 
-            // Setup graphics device manager
-            _graphics = new GraphicsDeviceManager(this);
-            _graphics.PreferredBackBufferWidth = _settings.WindowWidth;
-            _graphics.PreferredBackBufferHeight = _settings.WindowHeight;
-            _graphics.IsFullScreen = _settings.IsFullScreen;
-            _graphics.SynchronizeWithVerticalRetrace = _settings.VSync;
-            _graphics.ApplyChanges();
+            // Apply graphics settings (graphics device manager already created in constructor)
+            _graphics?.ApplyChanges();
 
             // Set window title
             Window.Title = _settings.WindowTitle;
@@ -118,6 +132,9 @@ public sealed class GameWindow : Game, IGameWindow
     {
         try
         {
+            #pragma warning disable CA1303 // Do not pass literals as localized parameters
+            System.Console.WriteLine("*** MONOGAME: LoadContent() called ***");
+            #pragma warning restore CA1303
             _logger.LogDebug("Loading game content");
 
             // Create sprite batch
@@ -133,16 +150,20 @@ public sealed class GameWindow : Game, IGameWindow
             _renderer.SetScaling(_settings.RenderScale);
             _renderer.EnableVSync(_settings.VSync);
 
-            // Initialize audio renderer
-            if (!_audioRenderer.Initialize(44100, 2, 1024))
-            {
-                throw new InvalidOperationException("Failed to initialize audio renderer");
-            }
-
+            // Initialize audio only if enabled
             if (_settings.AudioEnabled)
             {
+                if (!_audioRenderer.Initialize(44100, 2, 1024))
+                {
+                    throw new InvalidOperationException("Failed to initialize audio renderer");
+                }
+
                 _audioRenderer.SetVolume(_settings.AudioVolume);
                 _audioRenderer.StartPlayback();
+            }
+            else
+            {
+                _logger.LogInformation("Audio disabled; skipping audio initialization");
             }
 
             _logger.LogInformation("Game content loaded successfully");
@@ -160,29 +181,127 @@ public sealed class GameWindow : Game, IGameWindow
     /// <param name="gameTime">Game timing information</param>
     protected override void Update(GameTime gameTime)
     {
-        if (!_isInitialized || _disposed)
+        // Debug: Log first few Update calls
+        if (gameTime != null && gameTime.TotalGameTime.TotalSeconds < 2)
         {
+            #pragma warning disable CA1303 // Do not pass literals as localized parameters
+            System.Console.WriteLine($"*** MONOGAME: Update() called - TotalTime={gameTime.TotalGameTime.TotalSeconds:F2}s ***");
+            #pragma warning restore CA1303
+        }
+
+        if (!_isInitialized || _disposed || gameTime == null)
+        {
+            if (gameTime != null && gameTime.TotalGameTime.TotalSeconds < 2)
+            {
+                #pragma warning disable CA1303 // Do not pass literals as localized parameters
+                #pragma warning disable CA1508 // Avoid dead code
+                System.Console.WriteLine($"*** MONOGAME: Update() early return - Initialized={_isInitialized}, Disposed={_disposed}, GameTime={gameTime != null} ***");
+                #pragma warning restore CA1508
+                #pragma warning restore CA1303
+            }
             return;
         }
 
         try
         {
-            // Update input
-            _inputManager.Update();
+            // Update input safely
+            _inputManager?.Update();
 
             // Check for exit conditions
-            if (_inputManager.IsKeyPressed(Microsoft.Xna.Framework.Input.Keys.Escape))
+            if (_inputManager?.IsKeyPressed(Microsoft.Xna.Framework.Input.Keys.Escape) == true)
             {
                 WindowClosing?.Invoke(this, EventArgs.Empty);
                 Exit();
                 return;
             }
 
+            // Execute emulator frame if available
+            if (_emulator != null && _coreRenderer != null && !_disposed)
+            {
+                try
+                {
+                    // Debug: Log emulator execution attempt
+                    if (_emulator.FrameNumber < 5)
+                    {
+                        #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                        _logger.LogDebug("GameWindow: About to call StepFrame() - Frame: {Frame}, State: {State}",
+                            _emulator.FrameNumber, _emulator.State);
+                        #pragma warning restore CA1848
+                    }
+
+                    var stepResult = _emulator.StepFrame();
+
+                    // Debug: Log step result
+                    if (_emulator.FrameNumber < 5)
+                    {
+                        #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                        _logger.LogDebug("GameWindow: StepFrame() returned {Result} - Frame: {Frame}",
+                            stepResult, _emulator.FrameNumber);
+                        #pragma warning restore CA1848
+                    }
+
+                    var frameData = _coreRenderer.RenderFrame();
+                    if (frameData != null)
+                    {
+                        RenderFrame(frameData);
+
+                        // Debug: Log rendering activity
+                        if (_emulator.FrameNumber % 60 == 0)
+                        {
+                            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                            _logger.LogDebug("GameWindow: Rendered frame {Frame}, data size: {Size} bytes",
+                                _emulator.FrameNumber, frameData.Length);
+                            #pragma warning restore CA1848
+                        }
+                    }
+                    else
+                    {
+                        // Debug: Log when no frame data is available
+                        if (_emulator.FrameNumber % 60 == 0)
+                        {
+                            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                            _logger.LogDebug("GameWindow: No frame data from renderer at frame {Frame}", _emulator.FrameNumber);
+                            #pragma warning restore CA1848
+                        }
+                    }
+
+                    // Debug: Log emulator state every 60 frames
+                    if (_emulator.FrameNumber % 60 == 0)
+                    {
+                        #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                        _logger.LogDebug("Emulator running - Frame: {Frame}, Cycles: {Cycles}, State: {State}",
+                            _emulator.FrameNumber, _emulator.CycleCount, _emulator.State);
+
+                        // Also log basic emulator execution info
+                        _logger.LogDebug("Emulator Cycles: {Cycles}, Frame: {Frame}",
+                            _emulator.CycleCount, _emulator.FrameNumber);
+                        #pragma warning restore CA1848
+                    }
+                }
+                catch (Exception emulatorEx)
+                {
+                    _logger.LogError(emulatorEx, "Error during emulator execution");
+                }
+            }
+            else
+            {
+                // Debug: Log why emulator is not executing
+                if (gameTime.TotalGameTime.TotalSeconds < 5) // Only log for first 5 seconds
+                {
+                    #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                    _logger.LogWarning("*** GameWindow.Update: Emulator not executing - Emulator={Emulator}, Renderer={Renderer}, Disposed={Disposed} ***",
+                        _emulator != null ? "SET" : "NULL", _coreRenderer != null ? "SET" : "NULL", _disposed);
+                    #pragma warning restore CA1848
+                }
+            }
+
+
             base.Update(gameTime);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during game update");
+            // Don't rethrow to prevent crash
         }
     }
 
@@ -192,27 +311,28 @@ public sealed class GameWindow : Game, IGameWindow
     /// <param name="gameTime">Game timing information</param>
     protected override void Draw(GameTime gameTime)
     {
-        if (!_isInitialized || _disposed || GraphicsDevice == null)
+        if (!_isInitialized || _disposed || GraphicsDevice == null || gameTime == null)
         {
             return;
         }
 
         try
         {
-            // Clear screen
+            // Clear screen safely
             GraphicsDevice.Clear(Color.Black);
 
             // Calculate destination rectangle for NES screen
             var destRect = CalculateDestinationRectangle();
 
-            // Draw the current frame
-            _renderer.DrawFrame(destRect);
+            // Draw the current frame safely
+            _renderer?.DrawFrame(destRect);
 
             base.Draw(gameTime);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during game rendering");
+            // Don't rethrow to prevent crash
         }
     }
 
@@ -252,6 +372,22 @@ public sealed class GameWindow : Game, IGameWindow
     public void Close()
     {
         Exit();
+    }
+
+    /// <summary>
+    /// Sets the emulator and core renderer for frame execution
+    /// </summary>
+    /// <param name="emulator">The emulator instance</param>
+    /// <param name="coreRenderer">The core renderer instance</param>
+    public void SetEmulator(IEmulator emulator, Renderer coreRenderer)
+    {
+        _emulator = emulator;
+        _coreRenderer = coreRenderer;
+
+        #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+        _logger.LogDebug("*** GameWindow.SetEmulator called: Emulator={Emulator}, Renderer={Renderer} ***",
+            _emulator != null ? "SET" : "NULL", _coreRenderer != null ? "SET" : "NULL");
+        #pragma warning restore CA1848
     }
 
     /// <summary>

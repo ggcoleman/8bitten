@@ -18,6 +18,16 @@ public sealed class PictureProcessingUnit : IClockedComponent, IMemoryMappedComp
     private bool _isInitialized;
     private bool _isHeadless;
 
+    private bool _renderingEnabledLogged;
+    // Frame buffer for rendering (256x240 RGBA)
+    private bool _ppumaskFirstWriteLogged;
+    private int _ppudataInfoLogs;
+    private int _paletteWriteLogs;
+    private int _nametableWriteLogs;
+
+    private int _ppuaddrInfoLogs;
+    private readonly uint[] _frameBuffer = new uint[256 * 240];
+
     // PPU timing constants
     private const int SCANLINES_PER_FRAME = 262; // NTSC
     private const int CYCLES_PER_SCANLINE = 341;
@@ -132,7 +142,43 @@ public sealed class PictureProcessingUnit : IClockedComponent, IMemoryMappedComp
     public int ExecuteCycle()
     {
         if (!IsEnabled || !_isInitialized)
+        {
+            // Debug: Log why PPU is not executing
+            if (_state.Frame < 3)
+            {
+                #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                _logger.LogWarning("PPU ExecuteCycle SKIPPED: Enabled={Enabled}, Initialized={Initialized}", IsEnabled, _isInitialized);
+                #pragma warning restore CA1848
+            }
             return 1;
+        }
+
+        // Debug: Log PPU execution for first few frames
+        if (_state.Frame < 3 && _state.Cycle % 100 == 0)
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogDebug("PPU ExecuteCycle: Frame {Frame}, Scanline {Scanline}, Cycle {Cycle}",
+                _state.Frame, _state.Scanline, _state.Cycle);
+            #pragma warning restore CA1848
+        }
+
+        // Debug: Log when approaching VBlank - only once per scanline
+        if (_state.Cycle == 0 && _state.Scanline >= 240 && _state.Scanline <= 245)
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogDebug("*** PPU APPROACHING VBLANK: Frame {Frame}, Scanline {Scanline}, Cycle {Cycle}, CYCLES_PER_SCANLINE={MaxCycle} ***",
+                _state.Frame, _state.Scanline, _state.Cycle, CYCLES_PER_SCANLINE);
+            #pragma warning restore CA1848
+        }
+
+        // Debug: Log every scanline transition for first few frames
+        if (_state.Frame < 3 && _state.Cycle == 0)
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogDebug("PPU Scanline transition: Frame {Frame}, Scanline {Scanline}",
+                _state.Frame, _state.Scanline);
+            #pragma warning restore CA1848
+        }
 
         try
         {
@@ -141,16 +187,54 @@ public sealed class PictureProcessingUnit : IClockedComponent, IMemoryMappedComp
 
             // Advance timing
             _state.Cycle++;
+
+            // Debug: Log cycle advancement for scanline 245
+            if (_state.Scanline == 245 && (_state.Cycle >= 335 || _state.Cycle % 50 == 0))
+            {
+                #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                _logger.LogDebug("*** PPU CYCLE ADVANCE: Scanline 245, Cycle {Cycle}, CYCLES_PER_SCANLINE={MaxCycle}, Will advance? {WillAdvance} ***",
+                    _state.Cycle, CYCLES_PER_SCANLINE, _state.Cycle >= CYCLES_PER_SCANLINE);
+                #pragma warning restore CA1848
+            }
+
             if (_state.Cycle >= CYCLES_PER_SCANLINE)
             {
                 _state.Cycle = 0;
+                var oldScanline = _state.Scanline;
                 _state.Scanline++;
+
+                // Debug: Log scanline advancement for scanline 245
+                if (oldScanline == 245)
+                {
+                    #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                    _logger.LogDebug("*** PPU SCANLINE ADVANCE: Scanline {OldScanline} -> {NewScanline}, Cycle reset to 0 ***",
+                        oldScanline, _state.Scanline);
+                    #pragma warning restore CA1848
+                }
+
+                // Debug: Log critical scanline transitions
+                if (oldScanline == 240 || oldScanline == 241 || _state.Scanline == 241)
+                {
+                    #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                    _logger.LogDebug("*** PPU SCANLINE ADVANCE: Frame {Frame}, {OldScanline} -> {NewScanline} ***",
+                        _state.Frame, oldScanline, _state.Scanline);
+                    #pragma warning restore CA1848
+                }
 
                 if (_state.Scanline >= SCANLINES_PER_FRAME)
                 {
                     _state.Scanline = 0;
                     _state.Frame++;
                     _state.OddFrame = !_state.OddFrame;
+
+                    // Log first few frames to verify rendering
+                    if (_state.Frame <= 5)
+                    {
+                        #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                        _logger.LogInformation("PPU Frame {Frame} completed - BG Enabled: {BG}, Sprites Enabled: {Sprites}",
+                            _state.Frame, _state.Mask.HasFlag(PPUMask.ShowBackground), _state.Mask.HasFlag(PPUMask.ShowSprites));
+                        #pragma warning restore CA1848
+                    }
 
                     // Fire frame completed event
                     OnFrameCompleted();
@@ -175,6 +259,24 @@ public sealed class PictureProcessingUnit : IClockedComponent, IMemoryMappedComp
     /// <param name="masterCycles">Master clock cycles</param>
     public void SynchronizeClock(long masterCycles)
     {
+        // Debug: Log PPU synchronization for first few cycles
+        if (masterCycles <= 10)
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogDebug("PPU SynchronizeClock called: MasterCycle={Cycle}, Enabled={Enabled}, Initialized={Initialized}",
+                masterCycles, IsEnabled, _isInitialized);
+            #pragma warning restore CA1848
+        }
+
+        // Debug: Log PPU synchronization - first 10 calls and then every 1000 master cycles
+        if (masterCycles <= 10 || masterCycles % 1000 == 0)
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogDebug("*** PPU SynchronizeClock: MasterCycle={Cycle}, PPU Frame={Frame}, Scanline={Scanline}, Cycle={PPUCycle}, Enabled={Enabled}, Initialized={Initialized} ***",
+                masterCycles, _state.Frame, _state.Scanline, _state.Cycle, IsEnabled, _isInitialized);
+            #pragma warning restore CA1848
+        }
+
         // PPU runs at 3x CPU frequency, so execute 3 cycles for each master cycle
         for (int i = 0; i < 3; i++)
         {
@@ -210,6 +312,14 @@ public sealed class PictureProcessingUnit : IClockedComponent, IMemoryMappedComp
     /// <param name="address">Memory address</param>
     /// <returns>Byte value</returns>
     public byte ReadByte(ushort address) => ReadMemory(address);
+
+    /// <summary>
+    /// Peek a byte from PPU address space without side effects (for rendering)
+    /// </summary>
+    /// <param name="address">PPU address ($0000-$3FFF)</param>
+    /// <returns>Byte value at address</returns>
+    internal byte PeekMemory(ushort address) => _memoryMap.ReadByte(address);
+
 
     /// <summary>
     /// Write byte to PPU (IMemoryMappedComponent interface)
@@ -284,15 +394,45 @@ public sealed class PictureProcessingUnit : IClockedComponent, IMemoryMappedComp
     /// </summary>
     private void ExecutePPUCycle()
     {
+        // Debug: Log every scanline transition to see if we're missing scanline 241
+        if (_state.Cycle == 0 && (_state.Scanline >= 240 && _state.Scanline <= 245))
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogDebug("*** PPU SCANLINE TRANSITION: Frame {Frame}, Scanline {Scanline}, Cycle {Cycle} ***",
+                _state.Frame, _state.Scanline, _state.Cycle);
+            #pragma warning restore CA1848
+        }
+
+        // Debug: Log which branch we're taking for scanlines around VBlank
+        if (_state.Cycle == 0 && _state.Scanline >= 240 && _state.Scanline <= 245)
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogDebug("*** PPU SCANLINE BRANCH CHECK: Scanline={Scanline}, VBLANK_SCANLINE={VBlank}, Condition: Scanline==VBlank? {Equal} ***",
+                _state.Scanline, VBLANK_SCANLINE, _state.Scanline == VBLANK_SCANLINE);
+            #pragma warning restore CA1848
+        }
+
         // Handle different scanline types
         if (_state.Scanline < VISIBLE_SCANLINES)
         {
             // Visible scanlines (0-239)
             ExecuteVisibleScanline();
         }
+        else if (_state.Scanline == VISIBLE_SCANLINES)
+        {
+            // Post-render scanline (240) - idle
+            // No rendering; just idle timing
+        }
         else if (_state.Scanline == VBLANK_SCANLINE)
         {
             // VBlank start (scanline 241)
+            if (_state.Cycle == 1)
+            {
+                #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                _logger.LogDebug("*** PPU EXECUTING VBLANK START: Frame {Frame}, Scanline {Scanline}, Cycle {Cycle} ***",
+                    _state.Frame, _state.Scanline, _state.Cycle);
+                #pragma warning restore CA1848
+            }
             ExecuteVBlankStart();
         }
         else if (_state.Scanline > VBLANK_SCANLINE && _state.Scanline < PRE_RENDER_SCANLINE)
@@ -305,6 +445,14 @@ public sealed class PictureProcessingUnit : IClockedComponent, IMemoryMappedComp
             // Pre-render scanline (261)
             ExecutePreRenderScanline();
         }
+        else
+        {
+            // Debug: Log unexpected scanline values
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogWarning("*** PPU UNEXPECTED SCANLINE: Frame {Frame}, Scanline {Scanline}, Cycle {Cycle} ***",
+                _state.Frame, _state.Scanline, _state.Cycle);
+            #pragma warning restore CA1848
+        }
     }
 
     /// <summary>
@@ -312,9 +460,6 @@ public sealed class PictureProcessingUnit : IClockedComponent, IMemoryMappedComp
     /// </summary>
     private void ExecuteVisibleScanline()
     {
-        // In headless mode, we don't actually render but maintain timing
-        // This would be where pixel rendering logic goes in full mode
-        
         // Handle sprite evaluation at specific cycles
         if (_state.Cycle == 64)
         {
@@ -325,6 +470,12 @@ public sealed class PictureProcessingUnit : IClockedComponent, IMemoryMappedComp
         {
             // Sprite evaluation happens here
             // In headless mode, we skip the actual evaluation
+        }
+
+        // BASIC PIXEL RENDERING - Generate test pattern if not headless
+        if (!_isHeadless && _state.Cycle >= 1 && _state.Cycle <= 256)
+        {
+            RenderPixel(_state.Cycle - 1, _state.Scanline);
         }
     }
 
@@ -337,12 +488,56 @@ public sealed class PictureProcessingUnit : IClockedComponent, IMemoryMappedComp
         {
             // Set VBlank flag
             _state.Status |= PPUStatus.VBlank;
-            
-            // Generate NMI if enabled
-            if (_state.Control.HasFlag(PPUControl.NMIEnable))
+
+            // Log for VBlank flag setting (throttled)
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            if (_state.Frame <= 3 || (_state.Frame % 60) == 0)
             {
-                // Request NMI interrupt (would be handled by CPU)
+                _logger.LogInformation("*** PPU VBLANK FLAG SET: Frame {Frame}, Status = 0x{Status:X2}, VBlank bit = {VBlank} - MARIO SHOULD DETECT THIS! ***",
+                    _state.Frame, (byte)_state.Status, (_state.Status & PPUStatus.VBlank) != 0 ? "SET" : "CLEAR");
+            }
+            else
+            {
+                _logger.LogDebug("*** PPU VBLANK FLAG SET: Frame {Frame}, Status = 0x{Status:X2}, VBlank bit = {VBlank} - MARIO SHOULD DETECT THIS! ***",
+                    _state.Frame, (byte)_state.Status, (_state.Status & PPUStatus.VBlank) != 0 ? "SET" : "CLEAR");
+            }
+            #pragma warning restore CA1848
+
+            // Debug log for first few VBlanks
+            if (_state.Frame < 5)
+            {
+                #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                _logger.LogDebug("PPU VBlank started: Frame {Frame}, Status now 0x{Status:X2}, NMI Enabled: {NMI}",
+                    _state.Frame, (byte)_state.Status, _state.Control.HasFlag(PPUControl.NMIEnable));
+                #pragma warning restore CA1848
+            }
+
+            // Generate NMI if enabled OR for the first few frames to help games initialize
+            bool shouldTriggerNMI = _state.Control.HasFlag(PPUControl.NMIEnable) || _state.Frame < 3;
+
+            if (shouldTriggerNMI)
+            {
+                if (_state.Control.HasFlag(PPUControl.NMIEnable))
+                {
+                    #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                    _logger.LogDebug("PPU triggering NMI for frame {Frame} (NMI enabled by game)", _state.Frame);
+                    #pragma warning restore CA1848
+                }
+                else
+                {
+                    #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                    _logger.LogDebug("PPU triggering NMI for frame {Frame} (STARTUP - NMI disabled but forcing for initialization)", _state.Frame);
+                    #pragma warning restore CA1848
+                }
+
+                // Request NMI interrupt
                 OnVBlankStarted();
+            }
+            else
+            {
+                #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                _logger.LogDebug("PPU VBlank started but NMI disabled - no interrupt for frame {Frame}", _state.Frame);
+                #pragma warning restore CA1848
             }
         }
     }
@@ -388,13 +583,24 @@ public sealed class PictureProcessingUnit : IClockedComponent, IMemoryMappedComp
     private byte ReadPPUSTATUS()
     {
         var status = (byte)_state.Status;
-        
+        var vblankSet = _state.Status.HasFlag(PPUStatus.VBlank);
+
+
+        // Special logging when VBlank flag is read as SET
+        if (vblankSet)
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogDebug("*** PPU STATUS READ WITH VBLANK SET: Mario should proceed! Status = 0x{Status:X2}, Frame = {Frame} ***",
+                status, _state.Frame);
+            #pragma warning restore CA1848
+        }
+
         // Clear VBlank flag after reading
         _state.Status &= ~PPUStatus.VBlank;
-        
+
         // Reset address latch
         _state.WriteToggle = false;
-        
+
         return status;
     }
 
@@ -406,21 +612,66 @@ public sealed class PictureProcessingUnit : IClockedComponent, IMemoryMappedComp
     private byte ReadPPUDATA()
     {
         var value = _memoryMap.ReadByte(_state.VRAMAddress);
-        
+
         // Increment VRAM address
         _state.VRAMAddress += (ushort)(_state.Control.HasFlag(PPUControl.VRAMIncrement) ? 32 : 1);
-        
+
         return value;
     }
 
     private void WritePPUCTRL(byte value)
     {
+        var previous = _state.Control;
         _state.Control = (PPUControl)value;
+
+        // If NMI just became enabled while VBlank is already set, trigger an immediate NMI
+        if (!previous.HasFlag(PPUControl.NMIEnable) &&
+            _state.Control.HasFlag(PPUControl.NMIEnable) &&
+            _state.Status.HasFlag(PPUStatus.VBlank))
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogDebug("PPU: NMI enabled mid-VBlank; requesting immediate NMI (Frame {Frame})", _state.Frame);
+            #pragma warning restore CA1848
+            OnVBlankStarted();
+        }
+
+        // Reduce logging spam - only log first few writes
+        if (_state.Frame < 3)
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogInformation("PPU CTRL written: 0x{Value:X2} (Control: {Control})", value, _state.Control);
+            #pragma warning restore CA1848
+        }
     }
 
     private void WritePPUMASK(byte value)
     {
+        var previousMask = _state.Mask;
         _state.Mask = (PPUMask)value;
+
+        // Tiny one-time Info when rendering becomes enabled via PPUMASK
+        if (!_renderingEnabledLogged)
+        {
+            bool wasEnabled = previousMask.HasFlag(PPUMask.ShowBackground) || previousMask.HasFlag(PPUMask.ShowSprites);
+            bool isEnabled = _state.Mask.HasFlag(PPUMask.ShowBackground) || _state.Mask.HasFlag(PPUMask.ShowSprites);
+            if (!wasEnabled && isEnabled)
+            {
+                #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                _logger.LogInformation("PPU rendering enabled via PPUMASK (BG={BG}, Sprites={Sprites}, Mask=0x{Mask:X2})",
+                    _state.Mask.HasFlag(PPUMask.ShowBackground), _state.Mask.HasFlag(PPUMask.ShowSprites), (byte)_state.Mask);
+                #pragma warning restore CA1848
+                _renderingEnabledLogged = true;
+            }
+        }
+
+        // Log first PPUMASK write regardless of frame, then stay quiet
+        if (!_ppumaskFirstWriteLogged)
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogInformation("PPU MASK written: 0x{Value:X2} (Mask: {Mask})", value, _state.Mask);
+            #pragma warning restore CA1848
+            _ppumaskFirstWriteLogged = true;
+        }
     }
 
     private void WriteOAMADDR(byte value)
@@ -460,12 +711,46 @@ public sealed class PictureProcessingUnit : IClockedComponent, IMemoryMappedComp
             _state.VRAMAddress = (ushort)((_state.VRAMAddress & 0xFF00) | value);
             _state.WriteToggle = false;
         }
+
+        // Tiny info for first few address writes to help debug nametable/palette writes
+        if (_ppuaddrInfoLogs < 2)
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogInformation("PPU ADDR set to ${Address:X4}", _state.VRAMAddress);
+            #pragma warning restore CA1848
+            _ppuaddrInfoLogs++;
+        }
     }
 
     private void WritePPUDATA(byte value)
     {
+        // Log first couple of writes regardless of frame to confirm VRAM activity
+        if (_ppudataInfoLogs < 2)
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogInformation("PPU DATA written: 0x{Value:X2} to address 0x{Address:X4}", value, _state.VRAMAddress);
+            #pragma warning restore CA1848
+            _ppudataInfoLogs++;
+        }
+
+        // Additional targeted logs: palette and nametable writes (first few)
+        if (_state.VRAMAddress >= 0x3F00 && _state.VRAMAddress <= 0x3F1F && _paletteWriteLogs < 16)
+        {
+            #pragma warning disable CA1848
+            _logger.LogInformation("PPU PALETTE write: 0x{Value:X2} -> ${Addr:X4}", value, _state.VRAMAddress);
+            #pragma warning restore CA1848
+            _paletteWriteLogs++;
+        }
+        else if (_state.VRAMAddress >= 0x2000 && _state.VRAMAddress <= 0x2FFF && _nametableWriteLogs < 16)
+        {
+            #pragma warning disable CA1848
+            _logger.LogInformation("PPU NAMETABLE write: 0x{Value:X2} -> ${Addr:X4}", value, _state.VRAMAddress);
+            #pragma warning restore CA1848
+            _nametableWriteLogs++;
+        }
+
         _memoryMap.WriteByte(_state.VRAMAddress, value);
-        
+
         // Increment VRAM address
         _state.VRAMAddress += (ushort)(_state.Control.HasFlag(PPUControl.VRAMIncrement) ? 32 : 1);
     }
@@ -475,17 +760,22 @@ public sealed class PictureProcessingUnit : IClockedComponent, IMemoryMappedComp
         // OAM DMA - copy 256 bytes from CPU memory to OAM
         // In a full implementation, this would halt the CPU for 513-514 cycles
         var sourceAddress = (ushort)(value << 8);
-        
+
         #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
         _logger.LogTrace("OAM DMA from ${Address:X4}", sourceAddress);
         #pragma warning restore CA1848
-        
+
         // For headless mode, we just note the DMA operation
         // Full implementation would copy from CPU memory map
     }
 
     private void OnVBlankStarted()
     {
+        #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+        _logger.LogDebug("PPU OnVBlankStarted called - Frame {Frame}, Subscribers: {Count}",
+            _state.Frame, VBlankStarted?.GetInvocationList()?.Length ?? 0);
+        #pragma warning restore CA1848
+
         VBlankStarted?.Invoke(this, new VBlankEventArgs(_state.Frame, _state.Scanline));
     }
 
@@ -496,7 +786,95 @@ public sealed class PictureProcessingUnit : IClockedComponent, IMemoryMappedComp
 
     private void OnFrameCompleted()
     {
-        FrameCompleted?.Invoke(this, new FrameCompletedEventArgs(_state.Frame, 0, TimeSpan.Zero));
+        // Use the correct FrameCompletedEventArgs constructor
+        // (long frameNumber, long cycleCount, TimeSpan frameTime)
+        var frameTime = TimeSpan.FromMilliseconds(16.67); // ~60 FPS
+        var cycleCount = _state.Frame * 29780; // Approximate cycles per frame
+
+        var eventArgs = new FrameCompletedEventArgs(_state.Frame, cycleCount, frameTime);
+        FrameCompleted?.Invoke(this, eventArgs);
+
+        // Log frame completion with rendering info
+        if (!_isHeadless)
+        {
+            #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+            _logger.LogDebug("PPU Frame {Frame} completed with rendering enabled", _state.Frame);
+            #pragma warning restore CA1848
+        }
+    }
+
+    /// <summary>
+    /// Generate a test frame with basic pattern for debugging
+    /// </summary>
+    private static byte[] GenerateTestFrame()
+    {
+        const int width = 256;
+        const int height = 240;
+        var frameData = new byte[width * height * 4]; // RGBA
+
+        // Generate a simple test pattern
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                var index = (y * width + x) * 4;
+
+                // Create a simple gradient pattern
+                var r = (byte)(x % 256);
+                var g = (byte)(y % 256);
+                var b = (byte)((x + y) % 256);
+                var a = (byte)255;
+
+                frameData[index] = r;     // Red
+                frameData[index + 1] = g; // Green
+                frameData[index + 2] = b; // Blue
+                frameData[index + 3] = a; // Alpha
+            }
+        }
+
+        return frameData;
+    }
+
+    /// <summary>
+    /// Render a single pixel to the frame buffer
+    /// </summary>
+    /// <param name="x">X coordinate (0-255)</param>
+    /// <param name="y">Y coordinate (0-239)</param>
+    private void RenderPixel(int x, int y)
+    {
+        if (x < 0 || x >= 256 || y < 0 || y >= 240)
+            return;
+
+        var index = y * 256 + x;
+
+        // Generate a simple test pattern for now
+        // This will be replaced with actual NES rendering logic
+        uint color;
+
+        if (IsRenderingEnabled())
+        {
+            // Create a colorful test pattern when rendering is enabled
+            var r = (byte)((x * 255) / 256);
+            var g = (byte)((y * 255) / 240);
+            var b = (byte)(((x + y) * 255) / (256 + 240));
+            color = 0xFF000000 | ((uint)r << 16) | ((uint)g << 8) | b; // ARGB format
+        }
+        else
+        {
+            // Black when rendering is disabled
+            color = 0xFF000000; // Black
+        }
+
+        _frameBuffer[index] = color;
+    }
+
+    /// <summary>
+    /// Get the current frame buffer
+    /// </summary>
+    /// <returns>Frame buffer as ARGB pixel data</returns>
+    public ReadOnlySpan<uint> GetFrameBuffer()
+    {
+        return _frameBuffer.AsSpan();
     }
 }
 
