@@ -12,6 +12,10 @@ using EightBitten.Infrastructure.Platform.Audio;
 using EightBitten.Infrastructure.Platform.Input;
 using EightBitten.Infrastructure.Metrics;
 using EightBitten.Emulator.Console.CLI;
+using EightBitten.Core.CPU;
+using EightBitten.Core.Memory;
+using EightBitten.Core.Contracts;
+using EightBitten.Infrastructure.DependencyInjection;
 using Spectre.Console;
 
 namespace EightBitten.Console.CLI;
@@ -111,20 +115,38 @@ internal static class Program
             })
             .ConfigureServices((context, services) =>
             {
-                services.AddLogging(context.Configuration);
-                services.AddEmulatorConfiguration(context.Configuration);
+                // Add all 8Bitten core services
+                services.AddEightBittenCore(context.Configuration);
 
-                // Add emulator services
-                services.AddSingleton<NESEmulator>();
-                services.AddSingleton<Renderer>();
-                services.AddSingleton<AudioGenerator>();
+                // Add core emulation components
+                services.AddSingleton<CPU6502>();
+                services.AddSingleton<Core.PPU.PictureProcessingUnit>(provider =>
+                {
+                    var logger = provider.GetRequiredService<ILogger<Core.PPU.PictureProcessingUnit>>();
+                    var memoryMap = provider.GetRequiredService<IPPUMemoryMap>();
+                    return new Core.PPU.PictureProcessingUnit(logger, memoryMap, headless: false); // Enable rendering!
+                });
+                services.AddSingleton<Core.APU.AudioProcessingUnit>();
+                services.AddSingleton<ICPUMemoryMap, CPUMemoryMap>();
+                services.AddSingleton<IPPUMemoryMap, PPUMemoryMap>();
 
-                // Add platform services
+                // Add platform-specific services for CLI mode
                 services.AddSingleton<MonoGameRenderer>();
                 services.AddSingleton<NAudioRenderer>();
                 services.AddSingleton<InputManager>();
+                services.AddSingleton<JoypadMemory>();  // NES joypad MMIO ($4016/$4017)
+
                 services.AddSingleton<WindowManager>();
                 services.AddSingleton<PerformanceMonitor>();
+
+                // Add CLI-specific services
+                services.AddSingleton<Renderer>();
+                services.AddSingleton<AudioGenerator>(provider =>
+                {
+                    var apu = provider.GetRequiredService<Core.APU.AudioProcessingUnit>();
+                    var logger = provider.GetRequiredService<ILogger<AudioGenerator>>();
+                    return new AudioGenerator(apu, 44100, 1024, logger); // Standard audio settings
+                });
 
                 // Add CLI gaming services
                 services.AddSingleton<GameWindow>();
@@ -146,7 +168,7 @@ internal static class Program
             AnsiConsole.MarkupLine($"[green]Loading ROM:[/] {Path.GetFileName(romPath)}");
 
             // Get services
-            var emulator = serviceProvider.GetRequiredService<NESEmulator>();
+            var emulator = serviceProvider.GetRequiredService<IEmulator>();
             var renderer = serviceProvider.GetRequiredService<Renderer>();
             var audioGenerator = serviceProvider.GetRequiredService<AudioGenerator>();
             var windowManager = serviceProvider.GetRequiredService<WindowManager>();
@@ -158,15 +180,35 @@ internal static class Program
             // Load ROM
             try
             {
-                emulator.LoadROM(romPath);
+                var romData = await File.ReadAllBytesAsync(romPath);
+                var loadResult = await emulator.LoadRomAsync(romData);
+                if (!loadResult)
+                {
+                    AnsiConsole.MarkupLine("[red]Error: Failed to load ROM file[/]");
+                    return 2;
+                }
             }
             catch (Exception ex)
             {
                 AnsiConsole.MarkupLine($"[red]Error: Failed to load ROM file: {ex.Message}[/]");
                 return 2;
             }
+            // Register Joypad MMIO on CPU memory map with higher priority than APU
+            var cpuMemoryMap = serviceProvider.GetRequiredService<ICPUMemoryMap>();
+            var joypad = serviceProvider.GetRequiredService<JoypadMemory>();
+            cpuMemoryMap.RegisterComponent(joypad, priority: 50);
+
 
             AnsiConsole.MarkupLine("[green]ROM loaded successfully![/]");
+
+            // Initialize emulator (cast to concrete type for Initialize method)
+            ((NESEmulator)emulator).Initialize();
+
+            // Reset emulator to start from beginning
+            emulator.Reset();
+
+            // Start emulation
+            await emulator.StartAsync();
 
             // Create game window
             var gameWindow = new GameWindow(
@@ -176,6 +218,16 @@ internal static class Program
                 settings,
                 serviceProvider.GetRequiredService<ILogger<GameWindow>>());
 
+            // Initialize the core renderer
+            if (!renderer.Initialize())
+            {
+                AnsiConsole.MarkupLine("[red]Error: Failed to initialize core renderer[/]");
+                return 4;
+            }
+
+            // Set emulator and core renderer on the game window
+            gameWindow.SetEmulator(emulator, renderer);
+
             // Register window
             if (!windowManager.CreateWindow("main", gameWindow))
             {
@@ -183,17 +235,9 @@ internal static class Program
                 return 3;
             }
 
-            // Create game loop
-            var gameLoop = new GameLoop(
-                emulator,
-                gameWindow,
-                renderer,
-                audioGenerator,
-                new GameLoopSettings { AudioEnabled = settings.AudioEnabled },
-                serviceProvider.GetRequiredService<ILogger<GameLoop>>());
-
             AnsiConsole.MarkupLine("[green]Starting emulation...[/]");
             AnsiConsole.MarkupLine("[dim]Press ESC to exit[/]");
+
 
             // Start performance monitoring
             if (settings.PerformanceMonitoring)
@@ -201,18 +245,22 @@ internal static class Program
                 performanceMonitor.Start();
             }
 
-            // Start game loop
-            if (!gameLoop.Start())
+            // Run the game window (MonoGame handles the main loop)
+            try
             {
-                AnsiConsole.MarkupLine("[red]Error: Failed to start game loop[/]");
-                return 5;
+                AnsiConsole.MarkupLine("[yellow]*** DEBUG: About to call gameWindow.Run() ***[/]");
+                logger.LogInformation("*** DEBUG: About to call gameWindow.Run() ***");
+
+                // Run until window close (ESC) or app exit
+                gameWindow.Run();
             }
-
-            // Run the game window
-            gameWindow.Run();
-
-            // Stop game loop
-            await gameLoop.StopAsync();
+            catch (Exception gameEx)
+            {
+                logger.LogError(gameEx, "Error during game execution");
+                AnsiConsole.MarkupLine($"[red]Game execution error: {gameEx.Message}[/]");
+                AnsiConsole.MarkupLine($"[red]Stack trace: {gameEx.StackTrace}[/]");
+                // Continue to cleanup instead of crashing
+            }
 
             // Stop performance monitoring and show stats
             if (settings.PerformanceMonitoring)
